@@ -588,7 +588,7 @@ def seg_train(args,train_loader,val_loader,counter,victim=True,shadow=False,plot
             max_val, idx = torch.max(pred, 1)
             pred_oh = torch.nn.functional.one_hot(idx, num_classes=n_classes)
             pred_oh = pred_oh.permute(0, 3, 1, 2)
-            label_oh = label_oh.permute(0, 3, 1, 2)
+            #label_oh = label_oh.permute(0, 3, 1, 2)
             """loss = criterion_seg(pred, label.squeeze(1), device=device) + args.ffc_lambda * criterion_ffc(pred_oh,
                                                                                                        label_oh)"""
             # print(pred.shape)
