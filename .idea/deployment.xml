@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="shiva.parsarad@unibas.ch@chinchilla.dmi.unibas.ch:22 password (39)" remoteFilesAllowedToDisappearOnAutoupload="false">
+    <serverData>
+      <paths name="shiva.parsarad@unibas.ch@chinchilla.dmi.unibas.ch:22 password (39)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/parsar0000/parsarad2025dp-morph" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>
