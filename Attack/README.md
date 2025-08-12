@@ -1,6 +1,11 @@
 # Ruuning Attack model
-For running the attacks:
 
+First install the following packages:
+```
+pip install torch torchvision tqdm numpy matplotlib seaborn pandas scikit-learn scipy kornia opacus pillow
+```
+
+For running the attacks:
 
 For DUke:
 
@@ -17,3 +22,6 @@ python3 main.py --main_dir "UMNData" --n_classes 2 --OUTPUT_CHANNELS 2 --DPSGD T
  For details on defining other parameters such as batch size and more, please refer to our paper.
 
 This code includes multiple attack implementations; however, only the global loss results are reported in the paper. Additional modifications are required for the other attacks.
+
+
+

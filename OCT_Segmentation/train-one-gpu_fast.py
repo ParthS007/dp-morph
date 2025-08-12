@@ -18,8 +18,6 @@ import argparse
 import torch
 import tqdm
 import csv
-
-
 from data_one_gpu import get_data
 from losses import CombinedLoss, FocalFrequencyLoss
 from networks import get_model

@@ -16,13 +16,11 @@
 
 import argparse
 from os import path, makedirs
-
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import tqdm
 from torchinfo import summary
-
 from data import get_data
 from networks import UNet, get_model
 from utils import plot_mult, per_class_dice, mIOU

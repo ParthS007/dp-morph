@@ -19,7 +19,6 @@ import csv
 import torch
 import torchvision.models as models
 from torch.profiler import profile, record_function, ProfilerActivity
-
 import numpy as np
 import torch
 import torch.nn.functional as F
