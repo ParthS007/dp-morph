@@ -12,7 +12,7 @@ pip install fast-dp
 
 ```
 
-For running the code,you can:
+For running the code, you can:
 
 ```
 python train-one-gpu.py --dataset UMN --n_classes 2 --batch_size 16 --num_iterations 200 --learning_rate 0.0005 --model_name NestedUNet --device cuda
@@ -51,4 +51,9 @@ The arguments are:
 Please note: If you set the dataset to Duke, the n_classes parameter should be 9; for UMN, it should be 2.
 The remaining parameters for each dataset and model are detailed in the accompanying paper.
 
+# Computational Plots
 
+You can use plot_non_morph_computational.py to generate the computational plots reported in the paper.
+The corresponding dataset is provided in the same directory as oct_final_data.xlsx.
+
+For morphology-based results, use the dataset data_computational_morph.csv together with the script plot_morph_computational.py (these plots are not reported in the paper)
