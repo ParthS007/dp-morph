@@ -1,20 +1,32 @@
+# DP-Morph
+
+This repository contains the implementation of the code for the paper "**DP-Morph: Improving the Privacy-Utility-Performance Trade-off for Differentially Private OCT Segmentation**" accepted at AISec 2025 (18 th ACM Workshop on Artificial Intelligence and Security).
+
+
+# Datasets
+
+We use the Duke and UMN datasets, which are also included in this repository.
+
 # OCT_Segmentation
 
 This directory includes all codes that are necessary for generating morph and non-morph results for both DPSGD and non-DPSGD cases.
-First, the following packages:
-```
+## Requirements
+First, the following packages should be installed:
+
+```bash
 pip install torch tqdm numpy matplotlib opacus kornia torchinfo
 
 ``` 
 If you plan to use fastDP library, install:
-```
+
+```bash
 pip install fast-dp
 
 ```
-
+## Training
 For running the code, you can:
 
-```
+```bash
 python train-one-gpu.py --dataset UMN --n_classes 2 --batch_size 16 --num_iterations 200 --learning_rate 0.0005 --model_name NestedUNet --device cuda
 
 ```
@@ -57,3 +69,7 @@ You can use plot_non_morph_computational.py to generate the computational plots 
 The corresponding dataset is provided in the same directory as oct_final_data.xlsx.
 
 For morphology-based results, use the dataset data_computational_morph.csv together with the script plot_morph_computational.py (these plots are not reported in the paper)
+
+# Attack
+
+Please check the Attack directory.
