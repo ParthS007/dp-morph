@@ -27,10 +27,19 @@ pip install fast-dp
 For running the code, you can:
 
 ```bash
-python train-one-gpu.py --dataset UMN --n_classes 2 --batch_size 16 --num_iterations 200 --learning_rate 0.0005 --model_name NestedUNet --device cuda
+python train-one-gpu.py --dataset UMN --n_classes 2 --batch_size 16 --num_iterations 200 --learning_rate 0.0005 --model_name NestedUNet --morphology True --operation "close" 
 
 ```
-For running the fastDP,just replace train_one_gpu.py with train-one-gpu_fast.py.
+For non-morph cases, set morphology to False and there is no need to define the operation.
+To run the code in a privacy-preserving manner (using DPSGD), you should:
+
+```bash
+python train-one-gpu.py --dataset UMN --n_classes 2 --batch_size 16 --num_iterations 200 --learning_rate 0.0005 --model_name NestedUNet --morphology True --operation "close" --DPSGD True cuda 
+
+```
+
+For running the fastDP mode ,just replace train_one_gpu.py with train-one-gpu_fast.py.
+
 
 The arguments are:
 
@@ -60,8 +69,9 @@ The arguments are:
 | `--kernel_size`        | int     | 3                | Kernel size for morphology operations                                                           |
 
 
-Please note: If you set the dataset to Duke, the n_classes parameter should be 9; for UMN, it should be 2.
-The remaining parameters for each dataset and model are detailed in the accompanying paper.
+**Please note: If you set the dataset to Duke, the n_classes parameter should be 9; for UMN, it should be 2**.
+
+The remaining parameters for each dataset and model are detailed in the paper.
 
 # Computational Plots
 
