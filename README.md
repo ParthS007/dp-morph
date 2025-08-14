@@ -1,7 +1,38 @@
 # DP-Morph
 
-This repository contains the implementation of the code for the paper "**DP-Morph: Improving the Privacy-Utility-Performance Trade-off for Differentially Private OCT Segmentation**" accepted at AISec 2025 (18 th ACM Workshop on Artificial Intelligence and Security).
+This repository contains the implementation of the code for the paper "**DP-Morph: Improving the Privacy-Utility-Performance Trade-off for Differentially Private OCT Segmentation**".
+Our paper has been accepted at **ACM CCS 2025**, presented in the **18th ACM Workshop on Artificial Intelligence and Security (AISec)**.
 
+
+# About
+
+Medical imaging models, particularly for **Optical Coherence Tomography (OCT)**, play a crucial role in diagnosing retinal diseases. However, using sensitive medical data for training introduces **privacy concerns**, as attackers can infer whether a specific patient’s data was used.
+
+This project explores the trade-offs between **privacy**, **segmentation accuracy**, and **computational efficiency** when applying **Differentially Private Stochastic Gradient Descent (DPSGD)** to OCT segmentation models. We benchmark five state-of-the-art segmentation models:
+
+- **U-Net**
+- **LFUNet**
+- **Y-Net-Gen**
+- **FCN8s**
+- **NestedUNet**
+
+Here you can see the Performance of different models on Duke (top) and UMN (bottom) datasets. The top row shows non-private perfor-
+mance, the two bottom rows show results with DPSGD training for ε = 8 and ε = 200. Comparison with the true mask (lower
+left) shows that most models provide unsatisfactory segmentation performance with high privacy protection (ε = 8)
+
+![image](images/performance.png)
+
+
+under different privacy budgets (ε) and measure:
+
+- **Utility** – Segmentation accuracy (*Dice coefficient*, *MAE*, *Loss*)
+- **Privacy** – Theoretical (ε, δ) guarantees & empirical *Membership Inference Attacks*
+- **Performance** – *GPU memory*, *runtime*, *energy consumption*
+
+To mitigate the accuracy loss caused by DPSGD, we propose **DP-Morph**—a novel method that integrates **differentiable morphological operations** (like *dilation* and *erosion*) into the training pipeline, improving segmentation quality without weakening privacy guarantees.
+The following image shows the Segmentation performance of DP-Morph with NestedUNet for different morphological operators:
+
+![alt text](dp-morph.png)
 
 # Datasets
 
@@ -83,3 +114,9 @@ For morphology-based results, use the dataset data_computational_morph.csv toget
 # Attack
 
 Please check the Attack directory.
+
+
+# 📚 Citation
+
+If you use this repository, or if it inspires your work, please cite the following paper:
+

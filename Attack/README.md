@@ -1,4 +1,5 @@
 # Ruuning Attack model
+This code includes multiple attack implementations; however, only the global loss results are reported in the paper. Additional modifications are required for the other attacks.
 
 First install the following packages:
 
@@ -14,15 +15,18 @@ For DUke:
  python3 main.py --main_dir "DukeData" --n_classes 9 --OUTPUT_CHANNELS 9 --DPSGD True --epsilon 8 --morphology True --operation "open" 
  
 ```
-
 For UMN:
 
 ```bash
 python3 main.py --main_dir "UMNData" --n_classes 2 --OUTPUT_CHANNELS 2 --DPSGD True --epsilon 8 --morphology True --operation "open" 
  ```
- For details on defining other parameters such as batch size and more, please refer to our paper.
+Also in the args.py,you should:
+```bash
+OUTPUT_CHANNELS=9# 9 for Duke dataset and 2 for UMN
+```
 
-This code includes multiple attack implementations; however, only the global loss results are reported in the paper. Additional modifications are required for the other attacks.
+For details on defining other parameters such as batch size and more, please refer to our paper.
+
 
 ## reproducing the results
 
