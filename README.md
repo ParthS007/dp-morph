@@ -117,7 +117,7 @@ Please check the Attack directory.
 
 
 # 📚 Citation
-
+```bash
 @inproceedings{ParsaradDPMorph2025,
   author = {Parsarad, Shiva and Yousefzadeh-Asl-Miandoab, Ehsan and Kafieh, Raheleh and Tozun, Pinar and Ciorba, Florina M. and Wagner, Isabel},
   title = {DP-Morph: Improving the Privacy-Utility-Performance Trade-off for Differentially Private OCT Segmentation},
@@ -132,4 +132,4 @@ Please check the Attack directory.
   location = {Taipei, Taiwan},
   series = {AISec '25}
 }
-
+```
