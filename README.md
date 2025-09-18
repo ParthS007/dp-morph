@@ -117,6 +117,19 @@ Please check the Attack directory.
 
 
 # 📚 Citation
-
-If you use this repository, or if it inspires your work, please cite the following paper:
-
+```bash
+@inproceedings{ParsaradDPMorph2025,
+  author = {Parsarad, Shiva and Yousefzadeh-Asl-Miandoab, Ehsan and Kafieh, Raheleh and Tozun, Pinar and Ciorba, Florina M. and Wagner, Isabel},
+  title = {DP-Morph: Improving the Privacy-Utility-Performance Trade-off for Differentially Private OCT Segmentation},
+  booktitle = {Proceedings of the 2025 Workshop on Artificial Intelligence and Security (AISec '25)},
+  year = {2025},
+  isbn = {979-8-4007-1895-3/2025/10},
+  publisher = {Association for Computing Machinery},
+  address = {New York, NY, USA},
+  url = {https://doi.org/10.1145/3733799.3762984},
+  doi = {10.1145/3733799.3762984},
+  pages = {},   
+  location = {Taipei, Taiwan},
+  series = {AISec '25}
+}
+```
