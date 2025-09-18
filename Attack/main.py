@@ -299,8 +299,8 @@ if __name__ == "__main__":
     parser.add_argument('--in_channels', default=1, type=int)
     # Initially, do not set a default for image_dir
     parser.add_argument('--image_dir', type=str)
-    parser.add_argument('--DPSGD', type=lambda x: x.lower() == 'true', default=False)
-    parser.add_argument('--DPSGD_for_Saving_and_synthetic', type=lambda x: x.lower() == 'true', default=False)
+    parser.add_argument('--DPSGD', type=lambda x: x.lower() == 'true', default=True)
+    parser.add_argument('--DPSGD_for_Saving_and_synthetic', type=lambda x: x.lower() == 'true', default=True)
     parser.add_argument('--patchify', type=lambda x: x.lower() == 'true', default=False)
     parser.add_argument('--multiple_shadow', type=lambda x: x.lower() == 'true', default=False)
     parser.add_argument('--test', type=lambda x: x.lower() == 'true', default=True)

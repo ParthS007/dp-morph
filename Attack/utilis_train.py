@@ -1,3 +1,4 @@
+
 from args import *
 from data import DatasetOct
 from torch.utils.data import DataLoader
@@ -136,10 +137,10 @@ def get_victim(data, args):
             print("DPSGD is active")
             args.DPSGD = True
             victim_model = seg_train(args, victim_train_dataloader, victim_val_dataloader,counter=None,victim=True,shadow=False)
-            args.DPSGD = False
+            #args.DPSGD = False
             args.DPSGD_for_Saving_and_synthetic=True
-            print("DPSGD set to false but DPSGD_for_Saving_and_synthetic set o True")
-            assert not args.DPSGD, "Error: args.DPSGD was not properly set to False after the training!"
+            #print("DPSGD set to false but DPSGD_for_Saving_and_synthetic set to True")
+            #assert not args.DPSGD, "Error: args.DPSGD was not properly set to False after the training!"
         else:
             print("DPSGD is not active")
             victim_model = seg_train(args, victim_train_dataloader, victim_val_dataloader, counter=None, victim=True,
