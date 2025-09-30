@@ -133,3 +133,6 @@ Please check the Attack directory.
   series = {AISec '25}
 }
 ```
+
+If you have questions, feel free to reach me at: shiva.parsarad [at] unibas.ch  
+You can also learn more about my research here: [University profile](https://pet.dmi.unibas.ch/en/persons/shiva-parsarad/)
