@@ -79,8 +79,11 @@ def argument_parser():
     parser.add_argument('--save_dir', default='./saved_models/', type=str, help="Directory to save the models")
     parser.add_argument('--epsilon', default=8, type=float, help="Privacy epsilon value for DPSGD")
     parser.add_argument('--morphology', default=True, type=str2bool, help="morphology")
-    parser.add_argument('--operation',default='close', type=str, help="close, open or both")
+    parser.add_argument('--operation',default='both', type=str, help="both, close, open, dilation, erosion")
     parser.add_argument('--kernel_size', default=3, type=int, help="kernel size")
+    parser.add_argument('--clipping', default='flat', type=str, 
+                        choices=['flat', 'automatic', 'psac', 'normalized_sgd'],
+                        help="Gradient clipping strategy for DP-SGD (flat, automatic, psac, normalized_sgd)")
 
     # Parse the arguments
     args = parser.parse_args()
@@ -464,46 +467,29 @@ def get_files(path, ext):
     return [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f)) and f.endswith(ext)]
 
 
-def save_results_to_csv(args,file_name,max_grad_norm,noise_multiplier, model_name, learning_rate, batch_size, training_losses, validation_losses,dice_all, validation_dice_scores, privacy_epsilons,iterations,dataset,mae,per_layer_all_list):
-    # Prepare data to save in CSV
-    if args.morphology:
-        row_data = [
-            model_name,
-            learning_rate,
-            batch_size,
-            training_losses[-1] if training_losses else None,
-            validation_losses[-1] if validation_losses else None,
-            dice_all[-1] if dice_all else None,
-            validation_dice_scores[-1] if validation_dice_scores else None,
-            privacy_epsilons if privacy_epsilons else None,
-            max_grad_norm,
-            noise_multiplier,
-            iterations,
-            dataset,
-            mae[-1],
-            per_layer_all_list[-1],
-            args.operation,
-            args.kernel_size
-
-        ]
-    else:
-        row_data = [
-            model_name,
-            learning_rate,
-            batch_size,
-            training_losses[-1] if training_losses else None,
-            validation_losses[-1] if validation_losses else None,
-            dice_all[-1] if dice_all else None,
-            validation_dice_scores[-1] if validation_dice_scores else None,
-            privacy_epsilons if privacy_epsilons else None,
-            max_grad_norm,
-            noise_multiplier,
-            iterations,
-            dataset,
-            mae[-1],
-            per_layer_all_list[-1]
-
-        ]
+def save_results_to_csv(args,file_name,max_grad_norm,noise_multiplier, model_name, learning_rate, batch_size, training_losses, validation_losses,dice_all, validation_dice_scores, privacy_epsilons,iterations,dataset,mae,per_layer_all_list,clipping_strategy='none'):
+    # Prepare data to save in CSV - unified format
+    row_data = [
+        model_name,
+        dataset,
+        args.DPSGD,
+        clipping_strategy,
+        privacy_epsilons if privacy_epsilons else 0,
+        args.morphology,
+        args.operation if args.morphology else 'none',
+        args.kernel_size if args.morphology else 0,
+        learning_rate,
+        batch_size,
+        iterations,
+        training_losses[-1] if training_losses else None,
+        validation_losses[-1] if validation_losses else None,
+        validation_dice_scores[-1] if validation_dice_scores else None,
+        mae[-1] if mae else None,
+        dice_all[-1] if dice_all else None,
+        per_layer_all_list[-1] if per_layer_all_list else None,
+        max_grad_norm,
+        noise_multiplier
+    ]
 
     # Check if the CSV file exists
     file_exists = os.path.isfile(file_name)
@@ -513,16 +499,12 @@ def save_results_to_csv(args,file_name,max_grad_norm,noise_multiplier, model_nam
         with open(file_name, 'a', newline='') as file:
             writer = csv.writer(file)
             if not file_exists:
-                # Write the header only if the file doesn't exist
-                if args.morphology:
-                    writer.writerow(
-                        ["Model_Name", "Learning_Rate", "Batch_Size", "Training_Loss", "Validation_Loss", "dice_all",
-                         "Validation_Dice", "Privacy_Epsilons", 'max_grad_norm', 'noise_multiplier', 'iterations',
-                         'dataset', 'mae', 'per_layer_all_list','Operation','Kernel'])
-
-
-                else:
-                 writer.writerow(["Model_Name", "Learning_Rate", "Batch_Size", "Training_Loss", "Validation_Loss", "dice_all","Validation_Dice","Privacy_Epsilons", 'max_grad_norm', 'noise_multiplier', 'iterations', 'dataset','mae', 'per_layer_all_list'])
+                # Write the header only if the file doesn't exist - unified header
+                writer.writerow(
+                    ["Model_Name", "Dataset", "DPSGD", "Clipping_Strategy", "Epsilon", 
+                     "Morphology", "Operation", "Kernel_Size", "Learning_Rate", "Batch_Size", 
+                     "Iterations", "Training_Loss", "Validation_Loss", "Validation_Dice", 
+                     "MAE", "Dice_All", "Per_Layer_Dice", "Max_Grad_Norm", "Noise_Multiplier"])
             # Write the row of data
             writer.writerow(row_data)
 
@@ -703,7 +685,7 @@ def train(args):
         privacy_engine = PrivacyEngine()
         noise_multiplier = 1
         max_grad_norm = 1
-        model_name=f"{args.model_name}_DPSGD"
+        model_name=f"{args.model_name}_DPSGD_{args.clipping}"
 
         """model, optimizer, data_loader = privacy_engine.make_private(
             module=model,
@@ -711,15 +693,29 @@ def train(args):
             data_loader=train_loader,
             noise_multiplier=noise_multiplier,
             max_grad_norm=max_grad_norm, )"""
-        model, optimizer, data_loader = privacy_engine.make_private_with_epsilon(
-            module=model,
-            optimizer=optimizer,
-            data_loader=train_loader,
-            # noise_multiplier=noise_multiplier,
-            target_epsilon=args.epsilon,
-            target_delta=delta,
-            epochs=iterations,
-            max_grad_norm=max_grad_norm, )
+        
+        # Conditionally add clipping argument only if not using default 'flat'
+        if args.clipping == 'flat':
+            # Don't pass clipping argument for default behavior
+            model, optimizer, data_loader = privacy_engine.make_private_with_epsilon(
+                module=model,
+                optimizer=optimizer,
+                data_loader=train_loader,
+                target_epsilon=args.epsilon,
+                target_delta=delta,
+                epochs=iterations,
+                max_grad_norm=max_grad_norm, )
+        else:
+            # Pass clipping argument for advanced strategies
+            model, optimizer, data_loader = privacy_engine.make_private_with_epsilon(
+                module=model,
+                optimizer=optimizer,
+                data_loader=train_loader,
+                target_epsilon=args.epsilon,
+                target_delta=delta,
+                epochs=iterations,
+                max_grad_norm=max_grad_norm,
+                clipping=args.clipping, )
 
 
         privacy_epsilons = []
@@ -878,13 +874,14 @@ def train(args):
 
         if args.DPSGD== True:
             privacy_epsilon= privacy_epsilons[-1]
+            clipping_strategy = args.clipping
         else:
             privacy_epsilon=0
+            clipping_strategy = 'none'
 
 
-        if args.morphology:
-            file_name='new_model_results_fixed_epsilon_mae_morphology_dp.csv'
-        else:file_name= 'new_model_results_fixed_epsilon_mae.csv'
+        # Unified file naming
+        file_name='oct_results_comprehensive.csv'
         save_results_to_csv(args,
             file_name,
             max_grad_norm,
@@ -900,7 +897,8 @@ def train(args):
             iterations,
             args.dataset,
             mae_all,
-            per_layer_all_list
+            per_layer_all_list,
+            clipping_strategy
 
 
 
@@ -915,13 +913,12 @@ def train(args):
 
         if args.DPSGD == True:
             privacy_epsilon = privacy_epsilons[-1]
+            clipping_strategy = args.clipping
         else:
             privacy_epsilon = 0 # None
+            clipping_strategy = 'none'
 
-        if args.morphology:
-            file_name='new_model_results_fixed_epsilon_mae_morphology_random.csv'
-        else:
-            file_name= 'new_model_results_fixed_epsilon_mae.csv'
+        file_name='oct_results_comprehensive_test.csv'
         save_results_to_csv(args,
             file_name,
             max_grad_norm,
@@ -937,7 +934,8 @@ def train(args):
             iterations,
             args.dataset,
             mae_test,
-            per_layer_all_test
+            per_layer_all_test,
+            clipping_strategy
         )
 
 
