@@ -84,6 +84,7 @@ def argument_parser():
     parser.add_argument('--clipping', default='flat', type=str, 
                         choices=['flat', 'automatic', 'psac', 'normalized_sgd'],
                         help="Gradient clipping strategy for DP-SGD (flat, automatic, psac, normalized_sgd)")
+    parser.add_argument('--run_number', default=1, type=int, help="Run number for this experiment (1, 2, or 3)")
 
     # Parse the arguments
     args = parser.parse_args()
@@ -350,10 +351,24 @@ def segmentation_plots_test_morphology(val_loader, model, device,model_name,DPSG
             batch_processed += 1
 
 
-def segmentation_plots(val_loader, model, device, model_name, DPSGD, dataset, num_examples=5):  # this version can work after applying morphological approach or normal cases without applying any morphological technique  (because after applying morphology then prediction of the model is the result of morphology)
-    folder_name = f"{'' if not DPSGD else 'DPSGD'}_{dataset}_images"
-    if not os.path.exists(folder_name):
-        os.makedirs(folder_name)
+def segmentation_plots(val_loader, model, device, model_name, DPSGD, dataset, num_examples=5, batch_size=16, run_number=1, clipping_strategy='none', epsilon=0, morphology=False):  # this version can work after applying morphological approach or normal cases without applying any morphological technique  (because after applying morphology then prediction of the model is the result of morphology)
+    # Build directory structure matching results structure
+    results_dir = "results"
+    dataset_dir = os.path.join(results_dir, dataset)
+    if DPSGD:
+        dp_dir = os.path.join(dataset_dir, "dp")
+        if clipping_strategy == 'flat':
+            clipping_dir = os.path.join(dp_dir, "base")
+        else:
+            clipping_dir = os.path.join(dp_dir, clipping_strategy)
+        epsilon_dir = os.path.join(clipping_dir, f"epsilon_{int(epsilon) if epsilon else 8}")
+        morph_dir = os.path.join(epsilon_dir, "with_morph" if morphology else "no_morph")
+    else:
+        non_dp_dir = os.path.join(dataset_dir, "non_dp")
+        morph_dir = os.path.join(non_dp_dir, "with_morph" if morphology else "no_morph")
+    # Create plots subdirectory
+    plots_dir = os.path.join(morph_dir, "plots")
+    os.makedirs(plots_dir, exist_ok=True)
     batch_processed = 0
     model.eval()
     for imgs, masks in val_loader:
@@ -428,9 +443,11 @@ def segmentation_plots(val_loader, model, device, model_name, DPSGD, dataset, nu
 
             plt.axis('off')
 
-            # file_path = os.path.join(folder_name, f'{model_name}_{state}_{dataset}_{idx}.pdf')
-            # plt.savefig(file_path, format='pdf', bbox_inches='tight')
-            plt.show()
+            # Save plot to proper directory structure
+            model_name_lower = model_name.lower()
+            file_path = os.path.join(plots_dir, f'{model_name_lower}_batch{batch_size}_run{run_number}_example_{batch_processed}.png')
+            plt.savefig(file_path, format='png', bbox_inches='tight', dpi=150)
+            plt.close()  # Close figure to free memory
             batch_processed += 1
 
 
@@ -468,6 +485,25 @@ def get_files(path, ext):
 
 
 def save_results_to_csv(args,file_name,max_grad_norm,noise_multiplier, model_name, learning_rate, batch_size, training_losses, validation_losses,dice_all, validation_dice_scores, privacy_epsilons,iterations,dataset,mae,per_layer_all_list,clipping_strategy='none'):
+    # Build directory structure based on experimental strategy
+    results_dir = "results"
+    dataset_dir = os.path.join(results_dir, dataset)
+    if args.DPSGD:
+        dp_dir = os.path.join(dataset_dir, "dp")
+        if clipping_strategy == 'flat':
+            clipping_dir = os.path.join(dp_dir, "base")
+        else:
+            clipping_dir = os.path.join(dp_dir, clipping_strategy)
+        epsilon_dir = os.path.join(clipping_dir, f"epsilon_{int(privacy_epsilons) if privacy_epsilons else 8}")
+        morph_dir = os.path.join(epsilon_dir, "with_morph" if args.morphology else "no_morph")
+    else:
+        non_dp_dir = os.path.join(dataset_dir, "non_dp")
+        morph_dir = os.path.join(non_dp_dir, "with_morph" if args.morphology else "no_morph")
+    # Create directory structure
+    os.makedirs(morph_dir, exist_ok=True)
+    # Create filename with batch size and run number
+    model_name_lower = model_name.lower()
+    file_name = os.path.join(morph_dir, f"{model_name_lower}_batch{batch_size}_run{args.run_number}_results.csv")
     # Prepare data to save in CSV - unified format
     row_data = [
         model_name,
@@ -480,6 +516,7 @@ def save_results_to_csv(args,file_name,max_grad_norm,noise_multiplier, model_nam
         args.kernel_size if args.morphology else 0,
         learning_rate,
         batch_size,
+        args.run_number,
         iterations,
         training_losses[-1] if training_losses else None,
         validation_losses[-1] if validation_losses else None,
@@ -503,7 +540,7 @@ def save_results_to_csv(args,file_name,max_grad_norm,noise_multiplier, model_nam
                 writer.writerow(
                     ["Model_Name", "Dataset", "DPSGD", "Clipping_Strategy", "Epsilon", 
                      "Morphology", "Operation", "Kernel_Size", "Learning_Rate", "Batch_Size", 
-                     "Iterations", "Training_Loss", "Validation_Loss", "Validation_Dice", 
+                     "Run_Number", "Iterations", "Training_Loss", "Validation_Loss", "Validation_Dice", 
                      "MAE", "Dice_All", "Per_Layer_Dice", "Max_Grad_Norm", "Noise_Multiplier"])
             # Write the row of data
             writer.writerow(row_data)
@@ -904,7 +941,9 @@ def train(args):
 
         )
         print("saving has finished")
-        #segmentation_plots(val_loader, model, device, model_name, args.DPSGD, args.dataset,num_examples=20 )
+        segmentation_plots(val_loader, model, device, model_name, args.DPSGD, args.dataset, 
+                          num_examples=20, batch_size=batch_size, run_number=args.run_number,
+                          clipping_strategy=clipping_strategy, epsilon=privacy_epsilon, morphology=args.morphology)
 
 
     if test:
