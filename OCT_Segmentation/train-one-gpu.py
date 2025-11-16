@@ -26,65 +26,101 @@ from utils import MAE_New
 from utils import compute_dice
 from utils import compute_pa
 from opacus import PrivacyEngine
-from kornia.morphology import opening, closing,dilation,erosion
+from kornia.morphology import opening, closing, dilation, erosion
 import os
 import numpy as np
-#from fastDP import PrivacyEngine
+
+# from fastDP import PrivacyEngine
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+
 torch.cuda.empty_cache()
 print("Current Directory:", os.getcwd())
-PYTORCH_NO_CUDA_MEMORY_CACHING=1
-
+PYTORCH_NO_CUDA_MEMORY_CACHING = 1
 
 
 def str2bool(v):
     if isinstance(v, bool):
         return v
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+    if v.lower() in ("yes", "true", "t", "y", "1"):
         return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+    elif v.lower() in ("no", "false", "f", "n", "0"):
         return False
     else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
+        raise argparse.ArgumentTypeError("Boolean value expected.")
+
 
 def argument_parser():
     parser = argparse.ArgumentParser()
 
     # Add all arguments upfront
-    parser.add_argument('--dataset', default='Duke', choices=["Duke", "UMN"])
+    parser.add_argument("--dataset", default="Duke", choices=["Duke", "UMN"])
 
-    parser.add_argument('--batch_size', default=16 , type=int)
-    parser.add_argument('--num_iterations', default=200,type=int)
-    parser.add_argument('--learning_rate', default=5e-4, type=float)
-    parser.add_argument('--n_classes', default=9, type=int)
-    parser.add_argument('--ffc_lambda', default=0, type=float)
-    parser.add_argument('--weight_decay', default=1e-9, type=float)
-    parser.add_argument('--image_size', default='224', type=int)
-    parser.add_argument('--model_name', default="NestedUNet",
-                        choices=["unet", "y_net_gen", "y_net_gen_ffc", 'ReLayNet', 'UNetOrg', 'LFUNet', 'FCN8s',
-                                 'NestedUNet','SimplifiedFCN8s','ConvNet'])
-    parser.add_argument('--g_ratio', default=0.5, type=float)
-    parser.add_argument('--device', default="cuda", choices=["cuda", "cpu"])
-    #parser.add_argument('--seed', default=7, type=int)
+    parser.add_argument("--batch_size", default=16, type=int)
+    parser.add_argument("--num_iterations", default=200, type=int)
+    parser.add_argument("--learning_rate", default=5e-4, type=float)
+    parser.add_argument("--n_classes", default=9, type=int)
+    parser.add_argument("--ffc_lambda", default=0, type=float)
+    parser.add_argument("--weight_decay", default=1e-9, type=float)
+    parser.add_argument("--image_size", default="224", type=int)
+    parser.add_argument(
+        "--model_name",
+        default="NestedUNet",
+        choices=[
+            "unet",
+            "y_net_gen",
+            "y_net_gen_ffc",
+            "ReLayNet",
+            "UNetOrg",
+            "LFUNet",
+            "FCN8s",
+            "NestedUNet",
+            "SimplifiedFCN8s",
+            "ConvNet",
+        ],
+    )
+    parser.add_argument("--g_ratio", default=0.5, type=float)
+    parser.add_argument("--device", default="cuda", choices=["cuda", "cpu"])
+    # parser.add_argument('--seed', default=7, type=int)
 
-    parser.add_argument('--in_channels', default=1, type=int)
+    parser.add_argument("--in_channels", default=1, type=int)
     # Initially, do not set a default for image_dir
-    parser.add_argument('--image_dir', type=str)
-    parser.add_argument('--DPSGD', type=str2bool, default=False)
-    parser.add_argument('--test', type=bool, default=False)
+    parser.add_argument("--image_dir", type=str)
+    parser.add_argument("--DPSGD", type=str2bool, default=False)
+    parser.add_argument("--test", type=bool, default=False)
     # if save
-    parser.add_argument('--model_should_be_saved', type=bool, default=False)
-    parser.add_argument('--model_should_be_load', type=bool, default=False)
-    parser.add_argument('--save_dir', default='./saved_models/', type=str, help="Directory to save the models")
-    parser.add_argument('--epsilon', default=8, type=float, help="Privacy epsilon value for DPSGD")
-    parser.add_argument('--morphology', default=True, type=str2bool, help="morphology")
-    parser.add_argument('--operation',default='both', type=str, help="both, close, open, dilation, erosion")
-    parser.add_argument('--kernel_size', default=3, type=int, help="kernel size")
-    parser.add_argument('--clipping', default='flat', type=str, 
-                        choices=['flat', 'automatic', 'psac', 'normalized_sgd'],
-                        help="Gradient clipping strategy for DP-SGD (flat, automatic, psac, normalized_sgd)")
-    parser.add_argument('--run_number', default=1, type=int, help="Run number for this experiment (1, 2, or 3)")
+    parser.add_argument("--model_should_be_saved", type=bool, default=False)
+    parser.add_argument("--model_should_be_load", type=bool, default=False)
+    parser.add_argument(
+        "--save_dir",
+        default="./saved_models/",
+        type=str,
+        help="Directory to save the models",
+    )
+    parser.add_argument(
+        "--epsilon", default=8, type=float, help="Privacy epsilon value for DPSGD"
+    )
+    parser.add_argument("--morphology", default=True, type=str2bool, help="morphology")
+    parser.add_argument(
+        "--operation",
+        default="both",
+        type=str,
+        help="both, close, open, dilation, erosion",
+    )
+    parser.add_argument("--kernel_size", default=3, type=int, help="kernel size")
+    parser.add_argument(
+        "--clipping",
+        default="flat",
+        type=str,
+        choices=["flat", "automatic", "psac", "normalized_sgd"],
+        help="Gradient clipping strategy for DP-SGD (flat, automatic, psac, normalized_sgd)",
+    )
+    parser.add_argument(
+        "--run_number",
+        default=1,
+        type=int,
+        help="Run number for this experiment (1, 2, or 3)",
+    )
 
     # Parse the arguments
     args = parser.parse_args()
@@ -97,10 +133,6 @@ def argument_parser():
             args.image_dir = "../DukeData/"
 
     return args
-
-
-
-
 
 
 # Differential Privacy-Based Random Morphology Selector
@@ -142,20 +174,25 @@ def dp_select_from_choices(choices, target_choice, privacy_budget):
     return selected_choice
 
 
-def apply_kornia_morphology_multiclass(pred_mask:torch.Tensor, operation:str='both',kernel_size:int=3, probability=0.5) ->torch.Tensor:
+def apply_kornia_morphology_multiclass(
+    pred_mask: torch.Tensor,
+    operation: str = "both",
+    kernel_size: int = 3,
+    probability=0.5,
+) -> torch.Tensor:
     """
-        Apply morphological operations using Kornia to refine multi-class predicted masks.
+    Apply morphological operations using Kornia to refine multi-class predicted masks.
 
-        Args:
-            pred_mask (torch.Tensor): Multi-class mask of shape [B, C, H, W], where C = num_classes.
-            operation (str): 'open', 'close', 'both', or 'none'.
-            kernel_size (int): Size of the structuring element.
+    Args:
+        pred_mask (torch.Tensor): Multi-class mask of shape [B, C, H, W], where C = num_classes.
+        operation (str): 'open', 'close', 'both', or 'none'.
+        kernel_size (int): Size of the structuring element.
 
-        Returns:
-            torch.Tensor: Refined multi-class mask of shape [B, C, H, W].
-        """
-    choices=['open', 'close', 'both', 'none','dilation','erosion']
-    if operation not in ['open', 'close', 'both', 'none','dilation','erosion']:
+    Returns:
+        torch.Tensor: Refined multi-class mask of shape [B, C, H, W].
+    """
+    choices = ["open", "close", "both", "none", "dilation", "erosion"]
+    if operation not in ["open", "close", "both", "none", "dilation", "erosion"]:
         raise ValueError("Operation must be one of 'open', 'close', 'both', or 'none'.")
     """x = random.random()
     if x<probability:
@@ -171,29 +208,29 @@ def apply_kornia_morphology_multiclass(pred_mask:torch.Tensor, operation:str='bo
         operation = 'both'
     else:
         operation = operation"""
-    #operation= dp_select_from_choices(choices, operation, privacy_budget=0.1)
+    # operation= dp_select_from_choices(choices, operation, privacy_budget=0.1)
 
-    kernel= torch.ones(kernel_size, kernel_size).to(pred_mask.device)
-    if operation == 'dilation':
+    kernel = torch.ones(kernel_size, kernel_size).to(pred_mask.device)
+    if operation == "dilation":
         refined_mask = dilation(pred_mask, kernel)
-    elif operation == 'open':
+    elif operation == "open":
         refined_mask = opening(pred_mask, kernel)
-    elif operation == 'close':
+    elif operation == "close":
         refined_mask = closing(pred_mask, kernel)
-    elif operation == 'erosion':
+    elif operation == "erosion":
         refined_mask = erosion(pred_mask, kernel)
-    elif operation == 'both':
+    elif operation == "both":
         refined_mask = opening(pred_mask, kernel)
         refined_mask = closing(refined_mask, kernel)
-    elif operation == 'none':
+    elif operation == "none":
         refined_mask = pred_mask
     else:
-        raise ValueError('open', 'close', 'both', 'none','dilation','erosion')
+        raise ValueError("open", "close", "both", "none", "dilation", "erosion")
     return refined_mask
 
 
 def colored_text(st):
-    return '\033[91m' + st + '\033[0m'
+    return "\033[91m" + st + "\033[0m"
 
 
 def plot_examples(data_loader, model, device, num_examples=3):
@@ -209,42 +246,58 @@ def plot_examples(data_loader, model, device, num_examples=3):
         # Assuming the output is a softmax layer
         _, predicted_masks = torch.max(preds, dim=1)
         # Determine the maximum label for setting up the colormap
-        max_label= max (np.max(masks.cpu().numpy()), np.max(predicted_masks.cpu().numpy()))
-        cmap = plt.cm.get_cmap('viridis', max_label+1)
+        max_label = max(
+            np.max(masks.cpu().numpy()), np.max(predicted_masks.cpu().numpy())
+        )
+        cmap = plt.cm.get_cmap("viridis", max_label + 1)
 
         for idx in range(imgs.size(0)):
-            if batch_processed>= num_examples:
+            if batch_processed >= num_examples:
                 break
 
-            img=imgs[idx].cpu().numpy().squeeze()
-            mask=masks[idx].cpu().numpy().squeeze()
-            predicted_mask=predicted_masks[idx].cpu().numpy()
+            img = imgs[idx].cpu().numpy().squeeze()
+            mask = masks[idx].cpu().numpy().squeeze()
+            predicted_mask = predicted_masks[idx].cpu().numpy()
 
-            axs[batch_processed, 0].imshow(img, cmap='gray')  # Assuming image is in the first channel
-            axs[batch_processed, 0].set_title('Input Image')
-            axs[batch_processed, 0].axis('off')
+            axs[batch_processed, 0].imshow(
+                img, cmap="gray"
+            )  # Assuming image is in the first channel
+            axs[batch_processed, 0].set_title("Input Image")
+            axs[batch_processed, 0].axis("off")
 
-            axs[batch_processed, 1].imshow(mask, cmap=cmap, norm=mcolors.Normalize(vmin=0, vmax=max_label))
-            axs[batch_processed, 1].set_title('Ground Truth Mask')
-            axs[batch_processed, 1].axis('off')
+            axs[batch_processed, 1].imshow(
+                mask, cmap=cmap, norm=mcolors.Normalize(vmin=0, vmax=max_label)
+            )
+            axs[batch_processed, 1].set_title("Ground Truth Mask")
+            axs[batch_processed, 1].axis("off")
 
-            axs[batch_processed, 2].imshow(predicted_mask, cmap=cmap, norm=mcolors.Normalize(vmin=0, vmax=max_label))
-            axs[batch_processed, 2].set_title('Predicted Mask')
-            axs[batch_processed, 2].axis('off')
+            axs[batch_processed, 2].imshow(
+                predicted_mask,
+                cmap=cmap,
+                norm=mcolors.Normalize(vmin=0, vmax=max_label),
+            )
+            axs[batch_processed, 2].set_title("Predicted Mask")
+            axs[batch_processed, 2].axis("off")
 
-            batch_processed+=1
+            batch_processed += 1
         if batch_processed >= num_examples:
             break
 
     plt.tight_layout()
     plt.show()
+
+
 import random
-def segmentation_plots_test_morphology(val_loader, model, device,model_name,DPSGD, dataset, num_examples=5): # in this code, we already did not apply morphology
+
+
+def segmentation_plots_test_morphology(
+    val_loader, model, device, model_name, DPSGD, dataset, num_examples=5
+):  # in this code, we already did not apply morphology
 
     folder_name = f"{'' if not DPSGD else 'DPSGD'}_{dataset}_images"
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)
-    batch_processed=0
+    batch_processed = 0
     model.eval()
     for imgs, masks in val_loader:
         imgs, masks = imgs.to(device), masks.to(device)
@@ -254,13 +307,11 @@ def segmentation_plots_test_morphology(val_loader, model, device,model_name,DPSG
             if args.morphology:
                 refined_mask = apply_kornia_morphology_multiclass(
                     preds,
-                    operation='erosion',
+                    operation="erosion",
                     kernel_size=3,
                 )
-                #print("Loss value in original case", MAE(masks, preds, args.n_classes))
-                #print("Loss value for refined case", MAE(masks, refined_mask, args.n_classes))
-
-
+                # print("Loss value in original case", MAE(masks, preds, args.n_classes))
+                # print("Loss value for refined case", MAE(masks, refined_mask, args.n_classes))
 
                 _, refined_predicted_masks = torch.max(refined_mask, dim=1)
 
@@ -269,16 +320,15 @@ def segmentation_plots_test_morphology(val_loader, model, device,model_name,DPSG
         indices = list(range(imgs.size(0)))
         random.shuffle(indices)
 
-
         for idx in indices:  # Use shuffled indices to select random images
-            if batch_processed>= num_examples:
+            if batch_processed >= num_examples:
                 break
 
-            img=imgs[idx].cpu().numpy().squeeze()
-            msk=masks[idx].cpu().numpy().squeeze()
-            predicted_mask=predicted_masks[idx].cpu().numpy()
+            img = imgs[idx].cpu().numpy().squeeze()
+            msk = masks[idx].cpu().numpy().squeeze()
+            predicted_mask = predicted_masks[idx].cpu().numpy()
             if args.morphology:
-             refined_predicted_mask =refined_predicted_masks[idx].cpu().numpy()
+                refined_predicted_mask = refined_predicted_masks[idx].cpu().numpy()
 
             # Define colors for each layer (RGB tuples)
             layer_colors = {
@@ -290,7 +340,7 @@ def segmentation_plots_test_morphology(val_loader, model, device,model_name,DPSG
                 5: (1, 0, 1),  # Magenta
                 6: (0, 1, 1),  # Cyan
                 7: (1, 0.5, 0),  # Orange
-                8: (0.8, 0.7, 0.6)  # Light Brown
+                8: (0.8, 0.7, 0.6),  # Light Brown
             }
 
             def create_overlay(img, mask, layer_colors):
@@ -299,11 +349,12 @@ def segmentation_plots_test_morphology(val_loader, model, device,model_name,DPSG
                     overlay[mask == value] = color
                 return overlay
 
-
             true_overlay = create_overlay(img, msk, layer_colors)
             predicted_overlay = create_overlay(img, predicted_mask, layer_colors)
             if args.morphology:
-                refined_predicted_overlay = create_overlay(img, refined_predicted_mask, layer_colors)
+                refined_predicted_overlay = create_overlay(
+                    img, refined_predicted_mask, layer_colors
+                )
 
             original_rgb = np.stack([img] * 3, axis=-1)
             min_val = original_rgb.min()
@@ -312,49 +363,67 @@ def segmentation_plots_test_morphology(val_loader, model, device,model_name,DPSG
             original_rgb = (original_rgb - min_val) / (max_val - min_val)
 
             true_combined = np.clip(0.7 * original_rgb + 0.3 * true_overlay, 0, 1)
-            predicted_combined = np.clip(0.7 * original_rgb + 0.3 * predicted_overlay, 0, 1)
+            predicted_combined = np.clip(
+                0.7 * original_rgb + 0.3 * predicted_overlay, 0, 1
+            )
             if args.morphology:
-                refined_predicted_combined=np.clip(0.7 * original_rgb + 0.3 * refined_predicted_overlay, 0, 1)
-            if DPSGD==True:
-                state='DPSGD'
+                refined_predicted_combined = np.clip(
+                    0.7 * original_rgb + 0.3 * refined_predicted_overlay, 0, 1
+                )
+            if DPSGD == True:
+                state = "DPSGD"
             else:
-                state=''
-
+                state = ""
 
             # Plotting
             if args.morphology:
-             fig, axes = plt.subplots(1, 4, figsize=(30, 10))
+                fig, axes = plt.subplots(1, 4, figsize=(30, 10))
             else:
                 fig, axes = plt.subplots(1, 3, figsize=(30, 10))
-            axes[0].imshow(img, cmap='gray')
-            axes[0].set_title('Original Image')
-            axes[0].axis('off')
+            axes[0].imshow(img, cmap="gray")
+            axes[0].set_title("Original Image")
+            axes[0].axis("off")
 
             axes[1].imshow(true_combined)
-            axes[1].set_title('True Mask')
-            axes[1].axis('off')
+            axes[1].set_title("True Mask")
+            axes[1].axis("off")
 
             axes[2].imshow(predicted_combined)
-            axes[2].set_title('Predicted Mask')
-            axes[2].axis('off')
+            axes[2].set_title("Predicted Mask")
+            axes[2].axis("off")
             if args.morphology:
                 axes[3].imshow(refined_predicted_combined)
-                axes[3].set_title('Refined Predicted Mask')
-                axes[3].axis('off')
+                axes[3].set_title("Refined Predicted Mask")
+                axes[3].axis("off")
 
+            plt.axis("off")
 
-            plt.axis('off')
-
-            #file_path = os.path.join(folder_name, f'{model_name}_{state}_{dataset}_{idx}.pdf')
-            #plt.savefig(file_path, format='pdf', bbox_inches='tight')
+            # file_path = os.path.join(folder_name, f'{model_name}_{state}_{dataset}_{idx}.pdf')
+            # plt.savefig(file_path, format='pdf', bbox_inches='tight')
             plt.show()
             batch_processed += 1
 
 
-def segmentation_plots(data_loader, model, device, model_name, DPSGD, dataset, stage='validation', num_examples=5, batch_size=16, run_number=1, clipping_strategy='none', epsilon=0, morphology=False, operation='both', kernel_size=3):
+def segmentation_plots(
+    data_loader,
+    model,
+    device,
+    model_name,
+    DPSGD,
+    dataset,
+    stage="validation",
+    num_examples=5,
+    batch_size=16,
+    run_number=1,
+    clipping_strategy="none",
+    epsilon=0,
+    morphology=False,
+    operation="both",
+    kernel_size=3,
+):
     """
     Save segmentation plots organized by stage (validation or test).
-    
+
     Args:
         data_loader: validation or test data loader
         stage: 'validation' or 'test'
@@ -366,19 +435,25 @@ def segmentation_plots(data_loader, model, device, model_name, DPSGD, dataset, s
     dataset_dir = os.path.join(results_dir, dataset)
     if DPSGD:
         dp_dir = os.path.join(dataset_dir, "dp")
-        if clipping_strategy == 'flat':
+        if clipping_strategy == "flat":
             clipping_dir = os.path.join(dp_dir, "base")
         else:
             clipping_dir = os.path.join(dp_dir, clipping_strategy)
-        epsilon_dir = os.path.join(clipping_dir, f"epsilon_{int(epsilon) if epsilon else 8}")
+        epsilon_dir = os.path.join(
+            clipping_dir, f"epsilon_{int(epsilon) if epsilon else 8}"
+        )
         if morphology:
-            morph_dir = os.path.join(epsilon_dir, "with_morph", operation, f"kernel_{kernel_size}")
+            morph_dir = os.path.join(
+                epsilon_dir, "with_morph", operation, f"kernel_{kernel_size}"
+            )
         else:
             morph_dir = os.path.join(epsilon_dir, "no_morph")
     else:
         non_dp_dir = os.path.join(dataset_dir, "non_dp")
         if morphology:
-            morph_dir = os.path.join(non_dp_dir, "with_morph", operation, f"kernel_{kernel_size}")
+            morph_dir = os.path.join(
+                non_dp_dir, "with_morph", operation, f"kernel_{kernel_size}"
+            )
         else:
             morph_dir = os.path.join(non_dp_dir, "no_morph")
     # Create stage-specific plots subdirectory with run-wise folders
@@ -413,7 +488,7 @@ def segmentation_plots(data_loader, model, device, model_name, DPSGD, dataset, s
                 5: (1, 0, 1),  # Magenta
                 6: (0, 1, 1),  # Cyan
                 7: (1, 0.5, 0),  # Orange
-                8: (0.8, 0.7, 0.6)  # Light Brown
+                8: (0.8, 0.7, 0.6),  # Light Brown
             }
 
             def create_overlay(img, mask, layer_colors):
@@ -425,7 +500,6 @@ def segmentation_plots(data_loader, model, device, model_name, DPSGD, dataset, s
             true_overlay = create_overlay(img, msk, layer_colors)
             predicted_overlay = create_overlay(img, predicted_mask, layer_colors)
 
-
             original_rgb = np.stack([img] * 3, axis=-1)
             min_val = original_rgb.min()
             max_val = original_rgb.max()
@@ -433,35 +507,39 @@ def segmentation_plots(data_loader, model, device, model_name, DPSGD, dataset, s
             original_rgb = (original_rgb - min_val) / (max_val - min_val)
 
             true_combined = np.clip(0.7 * original_rgb + 0.3 * true_overlay, 0, 1)
-            predicted_combined = np.clip(0.7 * original_rgb + 0.3 * predicted_overlay, 0, 1)
+            predicted_combined = np.clip(
+                0.7 * original_rgb + 0.3 * predicted_overlay, 0, 1
+            )
 
             if DPSGD == True:
-                state = 'DPSGD'
+                state = "DPSGD"
             else:
-                state = ''
+                state = ""
 
             # Plotting
 
             fig, axes = plt.subplots(1, 3, figsize=(30, 10))
-            axes[0].imshow(img, cmap='gray')
-            axes[0].set_title('Original Image')
-            axes[0].axis('off')
+            axes[0].imshow(img, cmap="gray")
+            axes[0].set_title("Original Image")
+            axes[0].axis("off")
 
             axes[1].imshow(true_combined)
-            axes[1].set_title('True Mask')
-            axes[1].axis('off')
+            axes[1].set_title("True Mask")
+            axes[1].axis("off")
 
             axes[2].imshow(predicted_combined)
-            axes[2].set_title('Predicted Mask')
-            axes[2].axis('off')
+            axes[2].set_title("Predicted Mask")
+            axes[2].axis("off")
 
-
-            plt.axis('off')
+            plt.axis("off")
 
             # Save plot to run-wise folder (removed run_number from filename since it's in folder name)
             model_name_lower = model_name.lower()
-            file_path = os.path.join(plots_dir, f'{model_name_lower}_batch{batch_size}_example_{batch_processed}.png')
-            plt.savefig(file_path, format='png', bbox_inches='tight', dpi=150)
+            file_path = os.path.join(
+                plots_dir,
+                f"{model_name_lower}_batch{batch_size}_example_{batch_processed}.png",
+            )
+            plt.savefig(file_path, format="png", bbox_inches="tight", dpi=150)
             plt.close()  # Close figure to free memory
             batch_processed += 1
 
@@ -475,13 +553,13 @@ def visualize_batch(images, masks):
         msk = masks[i].squeeze()  # Remove channel dim if it's there
 
         ax[i, 0].imshow(img)
-        ax[i, 0].set_title('Input Image')
-        ax[i, 0].axis('off')
+        ax[i, 0].set_title("Input Image")
+        ax[i, 0].axis("off")
 
         ax[i, 1].imshow(img)
-        ax[i, 1].imshow(msk, alpha=0.3, cmap='jet')  # Overlay mask with transparency
-        ax[i, 1].set_title('Overlay Mask')
-        ax[i, 1].axis('off')
+        ax[i, 1].imshow(msk, alpha=0.3, cmap="jet")  # Overlay mask with transparency
+        ax[i, 1].set_title("Overlay Mask")
+        ax[i, 1].axis("off")
 
     plt.tight_layout()
     plt.show()
@@ -496,15 +574,35 @@ def set_seed(seed):
 
 
 def get_files(path, ext):
-    return [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f)) and f.endswith(ext)]
+    return [
+        f
+        for f in os.listdir(path)
+        if os.path.isfile(os.path.join(path, f)) and f.endswith(ext)
+    ]
 
 
-def save_results_to_csv(args, stage, max_grad_norm, noise_multiplier, model_name, learning_rate, batch_size, 
-                        training_losses, loss_value, dice_all, dice_score, privacy_epsilons, iterations, 
-                        dataset, mae, per_layer_all_list, clipping_strategy='none'):
+def save_results_to_csv(
+    args,
+    stage,
+    max_grad_norm,
+    noise_multiplier,
+    model_name,
+    learning_rate,
+    batch_size,
+    training_losses,
+    loss_value,
+    dice_all,
+    dice_score,
+    privacy_epsilons,
+    iterations,
+    dataset,
+    mae,
+    per_layer_all_list,
+    clipping_strategy="none",
+):
     """
     Save results to CSV files organized by stage (validation or test).
-    
+
     Args:
         stage: 'validation' or 'test'
         loss_value: validation_loss or test_loss
@@ -515,33 +613,41 @@ def save_results_to_csv(args, stage, max_grad_norm, noise_multiplier, model_name
     dataset_dir = os.path.join(results_dir, dataset)
     if args.DPSGD:
         dp_dir = os.path.join(dataset_dir, "dp")
-        if clipping_strategy == 'flat':
+        if clipping_strategy == "flat":
             clipping_dir = os.path.join(dp_dir, "base")
         else:
             clipping_dir = os.path.join(dp_dir, clipping_strategy)
-        epsilon_dir = os.path.join(clipping_dir, f"epsilon_{int(privacy_epsilons) if privacy_epsilons else 8}")
+        epsilon_dir = os.path.join(
+            clipping_dir, f"epsilon_{int(privacy_epsilons) if privacy_epsilons else 8}"
+        )
         if args.morphology:
-            morph_dir = os.path.join(epsilon_dir, "with_morph", args.operation, f"kernel_{args.kernel_size}")
+            morph_dir = os.path.join(
+                epsilon_dir, "with_morph", args.operation, f"kernel_{args.kernel_size}"
+            )
         else:
             morph_dir = os.path.join(epsilon_dir, "no_morph")
     else:
         non_dp_dir = os.path.join(dataset_dir, "non_dp")
         if args.morphology:
-            morph_dir = os.path.join(non_dp_dir, "with_morph", args.operation, f"kernel_{args.kernel_size}")
+            morph_dir = os.path.join(
+                non_dp_dir, "with_morph", args.operation, f"kernel_{args.kernel_size}"
+            )
         else:
             morph_dir = os.path.join(non_dp_dir, "no_morph")
-    
+
     # Create stage-specific subdirectory
     stage_dir = os.path.join(morph_dir, stage)
     os.makedirs(stage_dir, exist_ok=True)
-    
+
     # Create filename with batch size (run_number is a column, not in filename)
     model_name_lower = model_name.lower()
-    file_name = os.path.join(stage_dir, f"{model_name_lower}_batch{batch_size}_results.csv")
-    
+    file_name = os.path.join(
+        stage_dir, f"{model_name_lower}_batch{batch_size}_results.csv"
+    )
+
     # Global CSV file path (at results root) - separate for validation and test
     global_csv_path = os.path.join(results_dir, f"all_results_{stage}_global.csv")
-    
+
     # Prepare data to save in CSV - unified format
     row_data = [
         model_name,
@@ -550,7 +656,7 @@ def save_results_to_csv(args, stage, max_grad_norm, noise_multiplier, model_name
         clipping_strategy,
         privacy_epsilons if privacy_epsilons else 0,
         args.morphology,
-        args.operation if args.morphology else 'none',
+        args.operation if args.morphology else "none",
         args.kernel_size if args.morphology else 0,
         learning_rate,
         batch_size,
@@ -560,73 +666,106 @@ def save_results_to_csv(args, stage, max_grad_norm, noise_multiplier, model_name
         loss_value,  # validation_loss or test_loss
         dice_score,  # validation_dice or test_dice
         mae,
-        dice_all if isinstance(dice_all, str) else str(dice_all.tolist()) if hasattr(dice_all, 'tolist') else dice_all,
-        per_layer_all_list if isinstance(per_layer_all_list, str) else str(per_layer_all_list.tolist()) if hasattr(per_layer_all_list, 'tolist') else per_layer_all_list,
+        (
+            dice_all
+            if isinstance(dice_all, str)
+            else str(dice_all.tolist()) if hasattr(dice_all, "tolist") else dice_all
+        ),
+        (
+            per_layer_all_list
+            if isinstance(per_layer_all_list, str)
+            else (
+                str(per_layer_all_list.tolist())
+                if hasattr(per_layer_all_list, "tolist")
+                else per_layer_all_list
+            )
+        ),
         max_grad_norm,
         noise_multiplier,
-        stage  # Add stage column
+        stage,  # Add stage column
     ]
 
     # CSV header with stage column
-    header = ["Model_Name", "Dataset", "DPSGD", "Clipping_Strategy", "Epsilon", 
-              "Morphology", "Operation", "Kernel_Size", "Learning_Rate", "Batch_Size", 
-              "Run_Number", "Iterations", "Training_Loss", f"{stage.capitalize()}_Loss", f"{stage.capitalize()}_Dice", 
-              "MAE", "Dice_All", "Per_Layer_Dice", "Max_Grad_Norm", "Noise_Multiplier", "Stage"]
+    header = [
+        "Model_Name",
+        "Dataset",
+        "DPSGD",
+        "Clipping_Strategy",
+        "Epsilon",
+        "Morphology",
+        "Operation",
+        "Kernel_Size",
+        "Learning_Rate",
+        "Batch_Size",
+        "Run_Number",
+        "Iterations",
+        "Training_Loss",
+        f"{stage.capitalize()}_Loss",
+        f"{stage.capitalize()}_Dice",
+        "MAE",
+        "Dice_All",
+        "Per_Layer_Dice",
+        "Max_Grad_Norm",
+        "Noise_Multiplier",
+        "Stage",
+    ]
 
     try:
         # Save to per-experiment CSV
         file_exists = os.path.isfile(file_name)
-        with open(file_name, 'a', newline='') as file:
+        with open(file_name, "a", newline="") as file:
             writer = csv.writer(file)
             if not file_exists:
                 writer.writerow(header)
             writer.writerow(row_data)
-        
+
         print(f"{stage.capitalize()} results saved to {os.path.abspath(file_name)}")
-        
+
         # Save to global CSV
         global_file_exists = os.path.isfile(global_csv_path)
-        with open(global_csv_path, 'a', newline='') as file:
+        with open(global_csv_path, "a", newline="") as file:
             writer = csv.writer(file)
             if not global_file_exists:
                 writer.writerow(header)
             writer.writerow(row_data)
-        
-        print(f"{stage.capitalize()} results also saved to global CSV: {os.path.abspath(global_csv_path)}")
-        
+
+        print(
+            f"{stage.capitalize()} results also saved to global CSV: {os.path.abspath(global_csv_path)}"
+        )
+
     except Exception as e:
         print(f"Failed to save {stage} results to CSV: {e}")
 
-def eval(val_loader, criterion, model, n_classes, dice_s=True, device="cuda", im_save=False):
+
+def eval(
+    val_loader, criterion, model, n_classes, dice_s=True, device="cuda", im_save=False
+):
 
     model.eval()
     loss = 0
     counter = 0
     dice = 0
-    mae=0
+    mae = 0
 
     dice_all = np.zeros(n_classes)
-    per_layer_all=np.zeros(n_classes)
+    per_layer_all = np.zeros(n_classes)
     with torch.no_grad():
         for img, label in tqdm.tqdm(val_loader):
             img = img.to(device)
             label = label.to(device)
             label_oh = torch.nn.functional.one_hot(label, num_classes=n_classes)
 
-
             pred = model(img)
             max_val, idx = torch.max(pred, 1)
             pred_seg = idx.cpu().data.numpy()
             label_seg = label.cpu().data.numpy()
-            ret= compute_dice(label_seg, pred_seg)
+            ret = compute_dice(label_seg, pred_seg)
             print(f"dice score: {ret}")
-            pa =compute_pa(label_seg, pred_seg)
+            pa = compute_pa(label_seg, pred_seg)
             print(f"pa: {pa}")
 
-
-
             pred_oh = torch.nn.functional.one_hot(idx, num_classes=n_classes)
-            #print("shapes before : ", label_oh.shape, pred_oh.shape)
+            # print("shapes before : ", label_oh.shape, pred_oh.shape)
 
             if dice_s:
                 d1, d2 = per_class_dice(pred_oh, label_oh, n_classes)
@@ -635,21 +774,23 @@ def eval(val_loader, criterion, model, n_classes, dice_s=True, device="cuda", im
                 dice_all += d2
 
             loss += criterion(pred, label.squeeze(1), device=device).item()
-            #print(f"y_true shape: {label.shape}")
-            #print(f"y_pred shape: {pred.shape}")
+            # print(f"y_true shape: {label.shape}")
+            # print(f"y_pred shape: {pred.shape}")
 
-            label_mae = torch.nn.functional.one_hot(label, num_classes=n_classes).squeeze()
-            label_mae=label_mae.permute(0,3,1,2)
-            #init_mae,per_layer = MAE(label,pred, n_classes=args.n_classes)
+            label_mae = torch.nn.functional.one_hot(
+                label, num_classes=n_classes
+            ).squeeze()
+            label_mae = label_mae.permute(0, 3, 1, 2)
+            # init_mae,per_layer = MAE(label,pred, n_classes=args.n_classes)
             init_mae, per_layer = MAE_New(label_mae, pred, n_classes=args.n_classes)
-            #init_mae_new = mae_new(label_mae, pred)
+            # init_mae_new = mae_new(label_mae, pred)
 
-            mae+= init_mae.item()
+            mae += init_mae.item()
             print(f"MAE in this step: {init_mae}")
-            #print(f"MAE in new step: {init_mae_new}")
+            # print(f"MAE in new step: {init_mae_new}")
             print(f"MAE per layer: {per_layer}")
-            #print(f"MAE per layer new: {per_layer_new}")
-            per_layer_all+= per_layer # average of mean absolute error over each layer over all dataset
+            # print(f"MAE per layer new: {per_layer_new}")
+            per_layer_all += per_layer  # average of mean absolute error over each layer over all dataset
 
             counter += 1
 
@@ -660,8 +801,19 @@ def eval(val_loader, criterion, model, n_classes, dice_s=True, device="cuda", im
         per_layer_all = per_layer_all / counter
         mae = mae / counter
 
-        print("Validation loss: ", loss, " Mean Dice: ", dice, "Dice All:", dice_all, "MAE: ", mae, "per layer: ", per_layer_all)
-        return dice, loss, dice_all ,mae, per_layer_all
+        print(
+            "Validation loss: ",
+            loss,
+            " Mean Dice: ",
+            dice,
+            "Dice All:",
+            dice_all,
+            "MAE: ",
+            mae,
+            "per layer: ",
+            per_layer_all,
+        )
+        return dice, loss, dice_all, mae, per_layer_all
 
 
 def train(args):
@@ -676,45 +828,57 @@ def train(args):
     iterations = args.num_iterations
     img_size = args.image_size
     batch_size = args.batch_size
-    test=args.test
+    test = args.test
 
     training_losses = []
     validation_losses = []
-    dice_all_list=[]
-    per_layer_all_list=[]
-    mae_all=[]
+    dice_all_list = []
+    per_layer_all_list = []
+    mae_all = []
     validation_dice_scores = []
     max_consecutive_epochs_without_improvement = 10
     consecutive_epochs_without_improvement = 0
     best_test_loss = float("inf")
 
     # calculating len of data for delta
-    train_data_path = os.path.join(data_path, 'train')
-    train_data_path_images = os.path.join(train_data_path, 'images')
+    train_data_path = os.path.join(data_path, "train")
+    train_data_path_images = os.path.join(train_data_path, "images")
     images_files = os.listdir(train_data_path_images)
-    image_files = [file for file in images_files if file.endswith(('.npy'))]
+    image_files = [file for file in images_files if file.endswith((".npy"))]
     number_of_images = len(image_files)
 
     criterion_seg = CombinedLoss()
     criterion_ffc = FocalFrequencyLoss()
     if args.morphology:
-        final_save_dir=os.path.join(args.save_dir, 'morphology_models')
+        final_save_dir = os.path.join(args.save_dir, "morphology_models")
     else:
-        final_save_dir=os.path.join(args.save_dir, 'models')
+        final_save_dir = os.path.join(args.save_dir, "models")
 
     if not os.path.exists(final_save_dir):
         os.makedirs(final_save_dir)
 
     if args.DPSGD:
         if args.morphology:
-            save_name = os.path.join(final_save_dir, f"{args.model_name}_{args.dataset}_DPSGD_{args.num_iterations}_{args.batch_size}_{args.epsilon}_{args.operation}_{args.kernel_size}.pt")
+            save_name = os.path.join(
+                final_save_dir,
+                f"{args.model_name}_{args.dataset}_DPSGD_{args.num_iterations}_{args.batch_size}_{args.epsilon}_{args.operation}_{args.kernel_size}.pt",
+            )
         else:
-            save_name = os.path.join(final_save_dir, f"{args.model_name}_{args.dataset}_DPSGD_{args.num_iterations}_{args.batch_size}_{args.epsilon}.pt")
+            save_name = os.path.join(
+                final_save_dir,
+                f"{args.model_name}_{args.dataset}_DPSGD_{args.num_iterations}_{args.batch_size}_{args.epsilon}.pt",
+            )
     else:
         if args.morphology:
-            save_name = os.path.join(final_save_dir, f"{args.model_name}_{args.dataset}_{args.num_iterations}_{args.batch_size}_{args.operation}_{args.kernel_size}.pt")
+            save_name = os.path.join(
+                final_save_dir,
+                f"{args.model_name}_{args.dataset}_{args.num_iterations}_{args.batch_size}_{args.operation}_{args.kernel_size}.pt",
+            )
         else:
-            save_name = os.path.join(final_save_dir, f"{args.model_name}_{args.dataset}_{args.num_iterations}_{args.batch_size}.pt")
+            save_name = os.path.join(
+                final_save_dir,
+                f"{args.model_name}_{args.dataset}_{args.num_iterations}_{args.batch_size}.pt",
+            )
 
     # save_name = model_name  + ".pt"
 
@@ -725,50 +889,54 @@ def train(args):
     model = get_model(model_name, ratio=ratio, num_classes=n_classes).to(device)
     print(model_name)
 
+    optimizer = torch.optim.Adam(
+        list(model.parameters()), lr=learning_rate, weight_decay=args.weight_decay
+    )
 
-    optimizer = torch.optim.Adam(list(model.parameters()), lr=learning_rate,
-                                 weight_decay=args.weight_decay)
+    train_loader, val_loader, test_loader, _, _, _ = get_data(
+        data_path, img_size, batch_size
+    )
 
-    train_loader, val_loader, test_loader, _, _, _ = get_data(data_path, img_size, batch_size)
-
-    #for images, labels in train_loader:
-        #visualize_batch(images, labels)
-        #break
+    # for images, labels in train_loader:
+    # visualize_batch(images, labels)
+    # break
 
     if args.model_should_be_load:
         if os.path.exists(save_name):
             checkpoint = torch.load(save_name)
-            state_dict = checkpoint['model_state_dict']
+            state_dict = checkpoint["model_state_dict"]
 
             # Strip the `_module.` prefix if it exists
             new_state_dict = {}
             for key in state_dict.keys():
-                new_key = key.replace('_module.', '')  # Remove the _module prefix
+                new_key = key.replace("_module.", "")  # Remove the _module prefix
                 new_state_dict[new_key] = state_dict[key]
 
             model.load_state_dict(new_state_dict)
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            start_iteration = checkpoint['iteration'] + 1
-            training_losses.append(checkpoint['training_losses'])
-            validation_losses.append(checkpoint['validation_losses'])
-            validation_dice_scores.append(checkpoint['validation_dice_scores'])
-            best_test_loss = checkpoint['best_test_loss']
-            dice_all_list = checkpoint['per_layer_all_list']
-            mae_all = checkpoint['mae_all']
-            dice_all = checkpoint['dice_all_list']
-            consecutive_epochs_without_improvement = checkpoint['consecutive_epochs_without_improvement']
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            start_iteration = checkpoint["iteration"] + 1
+            training_losses.append(checkpoint["training_losses"])
+            validation_losses.append(checkpoint["validation_losses"])
+            validation_dice_scores.append(checkpoint["validation_dice_scores"])
+            best_test_loss = checkpoint["best_test_loss"]
+            dice_all_list = checkpoint["per_layer_all_list"]
+            mae_all = checkpoint["mae_all"]
+            dice_all = checkpoint["dice_all_list"]
+            consecutive_epochs_without_improvement = checkpoint[
+                "consecutive_epochs_without_improvement"
+            ]
             print(f"Resuming training from iteration {start_iteration}")
 
     else:
         start_iteration = 1
 
     # delta = 1 / (number_of_images ** 1.1)
-    if args.DPSGD==True:
+    if args.DPSGD == True:
         delta = 1e-5
         privacy_engine = PrivacyEngine()
         noise_multiplier = 1
         max_grad_norm = 2
-        model_name=f"{args.model_name}_DPSGD_{args.clipping}"
+        model_name = f"{args.model_name}_DPSGD_{args.clipping}"
 
         """model, optimizer, data_loader = privacy_engine.make_private(
             module=model,
@@ -776,9 +944,9 @@ def train(args):
             data_loader=train_loader,
             noise_multiplier=noise_multiplier,
             max_grad_norm=max_grad_norm, )"""
-        
+
         # Conditionally add clipping argument only if not using default 'flat'
-        if args.clipping == 'flat':
+        if args.clipping == "flat":
             # Don't pass clipping argument for default behavior
             model, optimizer, data_loader = privacy_engine.make_private_with_epsilon(
                 module=model,
@@ -787,7 +955,8 @@ def train(args):
                 target_epsilon=args.epsilon,
                 target_delta=delta,
                 epochs=iterations,
-                max_grad_norm=max_grad_norm, )
+                max_grad_norm=max_grad_norm,
+            )
         else:
             # Pass clipping argument for advanced strategies
             model, optimizer, data_loader = privacy_engine.make_private_with_epsilon(
@@ -798,16 +967,15 @@ def train(args):
                 target_delta=delta,
                 epochs=iterations,
                 max_grad_norm=max_grad_norm,
-                clipping=args.clipping, )
-
+                clipping=args.clipping,
+            )
 
         privacy_epsilons = []
     else:
-        noise_multiplier = 'None'
-        max_grad_norm = 'None'
-        delta='None'
-        model_name=args.model_name
-
+        noise_multiplier = "None"
+        max_grad_norm = "None"
+        delta = "None"
+        model_name = args.model_name
 
     for t in range(start_iteration, iterations):
         print("t iteration: ", t)
@@ -815,18 +983,20 @@ def train(args):
         total_loss = 0
         total_samples = 0
 
-        for img, label in (train_loader):
+        for img, label in train_loader:
             img = img.to(device)
 
             label = label.to(device)
 
-            label_oh = torch.nn.functional.one_hot(label, num_classes=n_classes).squeeze()
+            label_oh = torch.nn.functional.one_hot(
+                label, num_classes=n_classes
+            ).squeeze()
 
             pred = model(img)
-            #print(pred.shape)
-            #print("morphological operation")
-            #refined_image= apply_kornia_morphology_multiclass(pred, operation='dilation', kernel_size=3)
-            #print(refined_image.shape)
+            # print(pred.shape)
+            # print("morphological operation")
+            # refined_image= apply_kornia_morphology_multiclass(pred, operation='dilation', kernel_size=3)
+            # print(refined_image.shape)
 
             max_val, idx = torch.max(pred, 1)
             pred_oh = torch.nn.functional.one_hot(idx, num_classes=n_classes)
@@ -834,13 +1004,15 @@ def train(args):
             label_oh = label_oh.permute(0, 3, 1, 2)
             """loss = criterion_seg(pred, label.squeeze(1), device=device) + args.ffc_lambda * criterion_ffc(pred_oh,
                                                                                                        label_oh)"""
-            #print(pred.shape)
-            #print(label.squeeze(1).shape)
+            # print(pred.shape)
+            # print(label.squeeze(1).shape)
             if args.morphology:
-                pred= apply_kornia_morphology_multiclass(pred,operation=args.operation, kernel_size=args.kernel_size)
+                pred = apply_kornia_morphology_multiclass(
+                    pred, operation=args.operation, kernel_size=args.kernel_size
+                )
 
             loss = criterion_seg(pred, label.squeeze(1), device=device)
-            optimizer.zero_grad() #zero_grad clears old gradients from the last step (otherwise you’d just accumulate the gradients from all loss.backward() calls).
+            optimizer.zero_grad()  # zero_grad clears old gradients from the last step (otherwise you’d just accumulate the gradients from all loss.backward() calls).
             loss.backward()
             optimizer.step()
 
@@ -850,7 +1022,7 @@ def train(args):
         average_loss = total_loss / total_samples
         training_losses.append(average_loss)
 
-        if args.DPSGD==True:
+        if args.DPSGD == True:
             epsilon = privacy_engine.get_epsilon(delta)
             privacy_epsilons.append(epsilon)
 
@@ -862,23 +1034,27 @@ def train(args):
         else:
             print(
                 f"\tTrain Epoch: [{t + 1}/{iterations}] \t"
-                f"Train Loss: {np.mean(average_loss):.6f} ")
+                f"Train Loss: {np.mean(average_loss):.6f} "
+            )
 
-        #if t % 20 == 0:  # Every 20 epochs
-            #plot_examples(val_loader, model, device)
-            #segmentation_plots(val_loader, model, device, model_name, DPSGD=args.DPSGD, dataset=args.dataset, num_examples=1)
+        # if t % 20 == 0:  # Every 20 epochs
+        # plot_examples(val_loader, model, device)
+        # segmentation_plots(val_loader, model, device, model_name, DPSGD=args.DPSGD, dataset=args.dataset, num_examples=1)
 
-        if t % 2== 0 or t > 2:
+        if t % 2 == 0 or t > 2:
             print("Validation")
-            dice, validation_loss, dice_all,mae, per_layer_all = eval(val_loader, criterion_seg, model, dice_s=True, n_classes=n_classes)
-            #segmentation_plots(val_loader, model, device, model_name, args.DPSGD, args.dataset)
+            dice, validation_loss, dice_all, mae, per_layer_all = eval(
+                val_loader, criterion_seg, model, dice_s=True, n_classes=n_classes
+            )
+            # segmentation_plots(val_loader, model, device, model_name, args.DPSGD, args.dataset)
             validation_losses.append(validation_loss)
             validation_dice_scores.append(dice.item())
             mae_all.append(mae)
             dice_all_list.append(dice_all)
-            dice_all_str = str(per_layer_all.tolist()) # to make it possible to work with ast
+            dice_all_str = str(
+                per_layer_all.tolist()
+            )  # to make it possible to work with ast
             per_layer_all_list.append(dice_all_str)
-
 
             # print("Expert 1 - Test")
             # dice_test = eval(test_loader, criterion_seg, model, n_classes=n_classes)
@@ -891,45 +1067,54 @@ def train(args):
             if args.model_should_be_saved:
                 if args.DPSGD == True:
                     print(colored_text("Updating model, epoch: "), t)
-                    torch.save({
-                        'iteration': t,
-                        'model_state_dict': model.state_dict(),
-                        'optimizer_state_dict': optimizer.state_dict(),
-                        'training_losses': training_losses,
-                        'validation_losses': validation_losses,
-                        'validation_dice_scores': validation_dice_scores,
-                        'best_test_loss': best_test_loss,
-                        'dice_all_list': dice_all_list,
-                        'per_layer_all_list':per_layer_all_list,
-                        'mae_all':mae_all,
-                        'consecutive_epochs_without_improvement': consecutive_epochs_without_improvement,
-                        'privacy_epsilons': privacy_epsilons,
-
-                    }, save_name)
+                    torch.save(
+                        {
+                            "iteration": t,
+                            "model_state_dict": model.state_dict(),
+                            "optimizer_state_dict": optimizer.state_dict(),
+                            "training_losses": training_losses,
+                            "validation_losses": validation_losses,
+                            "validation_dice_scores": validation_dice_scores,
+                            "best_test_loss": best_test_loss,
+                            "dice_all_list": dice_all_list,
+                            "per_layer_all_list": per_layer_all_list,
+                            "mae_all": mae_all,
+                            "consecutive_epochs_without_improvement": consecutive_epochs_without_improvement,
+                            "privacy_epsilons": privacy_epsilons,
+                        },
+                        save_name,
+                    )
                 else:
                     print(colored_text("Updating model, epoch: "), t)
-                    torch.save({
-                        'iteration': t,
-                        'model_state_dict': model.state_dict(),
-                        'optimizer_state_dict': optimizer.state_dict(),
-                        'training_losses': training_losses,
-                        'validation_losses': validation_losses,
-                        'validation_dice_scores': validation_dice_scores,
-                        'best_test_loss': best_test_loss,
-                        'dice_all_list': dice_all_list,
-                        'per_layer_all_list':per_layer_all_list,
-                        'mae_all':mae_all,
-                        'consecutive_epochs_without_improvement': consecutive_epochs_without_improvement,
-                    }, save_name)
+                    torch.save(
+                        {
+                            "iteration": t,
+                            "model_state_dict": model.state_dict(),
+                            "optimizer_state_dict": optimizer.state_dict(),
+                            "training_losses": training_losses,
+                            "validation_losses": validation_losses,
+                            "validation_dice_scores": validation_dice_scores,
+                            "best_test_loss": best_test_loss,
+                            "dice_all_list": dice_all_list,
+                            "per_layer_all_list": per_layer_all_list,
+                            "mae_all": mae_all,
+                            "consecutive_epochs_without_improvement": consecutive_epochs_without_improvement,
+                        },
+                        save_name,
+                    )
 
-            if validation_loss < best_test_loss : # if there is any improvement
-                best_test_loss= validation_loss
+            if validation_loss < best_test_loss:  # if there is any improvement
+                best_test_loss = validation_loss
                 consecutive_epochs_without_improvement = 0  # reset
             else:
                 consecutive_epochs_without_improvement = +1
-            if consecutive_epochs_without_improvement >= max_consecutive_epochs_without_improvement:
+            if (
+                consecutive_epochs_without_improvement
+                >= max_consecutive_epochs_without_improvement
+            ):
                 print(
-                    f"Stopping training due to lack of improvement for {max_consecutive_epochs_without_improvement} epochs.")
+                    f"Stopping training due to lack of improvement for {max_consecutive_epochs_without_improvement} epochs."
+                )
                 break  # Exit the training loop
         """import matplotlib.pyplot as plt
         plt.plot(range(len(privacy_epsilons)), privacy_epsilons)
@@ -942,13 +1127,12 @@ def train(args):
     # print("Best iteration: ", best_iter, "Best val dice: ", max_dice, "Best test dice: ", best_test_dice)
     print(f" training loss:{training_losses}")
     print(f" validation loss:{validation_losses}")
-    if args.DPSGD==True:
+    if args.DPSGD == True:
         print(f" privacy_epsilons:{privacy_epsilons}")
         privacy_epsilons_str = str(privacy_epsilons)
     else:
-        privacy_epsilons_str=0
+        privacy_epsilons_str = 0
     print(f" validation dice score:{validation_dice_scores}")
-
 
     # Always save validation results after training
     print("Best iteration: ", best_iter, "Best val dice: ", max_dice)
@@ -958,13 +1142,13 @@ def train(args):
         clipping_strategy = args.clipping
     else:
         privacy_epsilon = 0
-        clipping_strategy = 'none'
+        clipping_strategy = "none"
 
     # Save validation results
     print("\n=== Saving Validation Results ===")
     save_results_to_csv(
         args=args,
-        stage='validation',
+        stage="validation",
         max_grad_norm=max_grad_norm,
         noise_multiplier=noise_multiplier,
         model_name=model_name,
@@ -979,9 +1163,9 @@ def train(args):
         dataset=args.dataset,
         mae=mae_all[-1] if mae_all else None,
         per_layer_all_list=per_layer_all_list[-1] if per_layer_all_list else None,
-        clipping_strategy=clipping_strategy
+        clipping_strategy=clipping_strategy,
     )
-    
+
     # Save validation plots
     print("Saving validation plots...")
     segmentation_plots(
@@ -991,15 +1175,15 @@ def train(args):
         model_name=model_name,
         DPSGD=args.DPSGD,
         dataset=args.dataset,
-        stage='validation',
+        stage="validation",
         num_examples=20,
         batch_size=batch_size,
         run_number=args.run_number,
         clipping_strategy=clipping_strategy,
         epsilon=privacy_epsilon,
         morphology=args.morphology,
-        operation=args.operation if args.morphology else 'both',
-        kernel_size=args.kernel_size if args.morphology else 3
+        operation=args.operation if args.morphology else "both",
+        kernel_size=args.kernel_size if args.morphology else 3,
     )
     print("Validation results and plots saved!")
 
@@ -1013,7 +1197,7 @@ def train(args):
     print("\n=== Saving Test Results ===")
     save_results_to_csv(
         args=args,
-        stage='test',
+        stage="test",
         max_grad_norm=max_grad_norm,
         noise_multiplier=noise_multiplier,
         model_name=model_name,
@@ -1022,15 +1206,15 @@ def train(args):
         training_losses=training_losses,
         loss_value=test_loss,
         dice_all=dice_all_test,
-        dice_score=dice_test.item() if hasattr(dice_test, 'item') else dice_test,
+        dice_score=dice_test.item() if hasattr(dice_test, "item") else dice_test,
         privacy_epsilons=privacy_epsilon,
         iterations=iterations,
         dataset=args.dataset,
         mae=mae_test,
         per_layer_all_list=per_layer_all_test,
-        clipping_strategy=clipping_strategy
+        clipping_strategy=clipping_strategy,
     )
-    
+
     # Save test plots
     print("Saving test plots...")
     segmentation_plots(
@@ -1040,36 +1224,33 @@ def train(args):
         model_name=model_name,
         DPSGD=args.DPSGD,
         dataset=args.dataset,
-        stage='test',
+        stage="test",
         num_examples=20,
         batch_size=batch_size,
         run_number=args.run_number,
         clipping_strategy=clipping_strategy,
         epsilon=privacy_epsilon,
         morphology=args.morphology,
-        operation=args.operation if args.morphology else 'both',
-        kernel_size=args.kernel_size if args.morphology else 3
+        operation=args.operation if args.morphology else "both",
+        kernel_size=args.kernel_size if args.morphology else 3,
     )
     print("Test results and plots saved!")
     print(f" training loss:{training_losses}")
     print(f" validation loss:{validation_losses}")
 
-
     return model
 
 
-
 import time
+
 if __name__ == "__main__":
     args = argument_parser()
     start_time = time.time()
     print(args)
-    #set_seed(args.seed)
+    # set_seed(args.seed)
     train(args)
     end_time = time.time()  # Record the end time
     print(f"Total execution time: {end_time - start_time:.2f} seconds")
 
 
 # scp /home/parsar0000/pythonProject4/training.py shiva.parsarad@unibas.ch@chinchilla.dmi.unibas.ch:/home/parsar0000/BPR/pythonProject4
-
-
