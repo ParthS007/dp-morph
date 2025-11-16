@@ -27,3 +27,6 @@ Thumbs.db
 
 # Ignore nested repo
 fast_differential_privacy/
+legacy_archive/
+OCT_Segmentation/results/
+OCT_Segmentation/slurm_jobs/
