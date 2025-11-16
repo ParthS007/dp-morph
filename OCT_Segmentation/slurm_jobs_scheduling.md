@@ -7,18 +7,17 @@ This directory contains scripts to schedule all 108 experiments via SLURM job ar
 The experimental matrix includes:
 - 3 Models: UNet, NestedUNet, LFUNet
 - 2 Datasets: Duke (9 classes), UMN (2 classes)
-- 2 Privacy Modes: Non-DP (6 experiments per dataset), DP-SGD (48 experiments per dataset)
-- 4 Clipping Strategies (DP only): base/flat, automatic, psac, normalized_sgd
-- 2 Morphology Conditions: with, without
+- 2 Privacy Modes: Non-DP, DPSGD
+- 4 Clipping Strategies for DPSGD: flat, automatic, psac, normalized_sgd
+- 2 Morphology Conditions: with and without
 - 2 Epsilon Values (DP only): 8, 200
-
-Total: 108 experiments (54 per dataset)
+- 3 run for each combination
 
 ## How Job Arrays Work
 
-Instead of creating 108 individual SLURM scripts, we use a single array job with 108 tasks:
-- One `commands.cmd` file containing all 108 training commands (one per line)
-- One `array_job.sh` script that uses `--array=1-108%20` to run tasks 1-108 with max 20 concurrent
+Instead of creating individual SLURM scripts, we use a single array job with tasks:
+- One `commands.cmd` file containing all training commands (one per line)
+- For example: One `array_job.sh` script that uses `--array=1-108%20` to run tasks 1-108 with max 20 concurrent
 - Each task reads its command from `commands.cmd` using `SLURM_ARRAY_TASK_ID`
 
 ## Usage
@@ -112,21 +111,3 @@ The generated array job script:
 - Activates the conda environment automatically
 - Reads command from `commands.cmd` using `SLURM_ARRAY_TASK_ID`
 - Saves logs to `slurm_jobs/*/logs/` with format `oct_experiments_JOBID_TASKID.out`
-
-## Results Organization
-
-Results are saved according to the experimental strategy structure:
-```
-results/
-├── Duke/
-│   ├── non_dp/
-│   │   ├── no_morph/
-│   │   └── with_morph/
-│   └── dp/
-│       ├── base/
-│       ├── automatic/
-│       ├── psac/
-│       └── normalized_sgd/
-└── UMN/
-    └── (same structure)
-```

@@ -1,20 +1,4 @@
 #!/usr/bin/env python3
-"""
-Generate SLURM job array scripts for OCT Segmentation experimental matrix.
-
-This script generates SLURM job array scripts according to the experimental strategy:
-- 3 models (UNet, NestedUNet, LFUNet)
-- 2 datasets (Duke, UMN)
-- 2 privacy modes (Non-DP, DP with 4 clipping strategies)
-- 4 clipping strategies (base/flat, automatic, psac, normalized_sgd) - DP only
-- 2 morphology conditions (with, without)
-- 2 epsilon values (8, 200) - DP only
-
-Total: 108 experiments (54 per dataset)
-
-Uses SLURM job arrays for efficient scheduling.
-"""
-
 from pathlib import Path
 from typing import List, Dict
 
@@ -34,28 +18,26 @@ DATASET_CONFIG = {"Duke": {"n_classes": 9}, "UMN": {"n_classes": 2}}
 
 # SLURM configuration
 SLURM_CONFIG = {
-    "partition": "a100-80g",
-    "qos": "gpu6hours",
+    "partition": "rtx4090",
+    "qos": "rtx4090-6hours",
     "nodes": 1,
     "ntasks": 1,
     "cpus_per_task": 4,
     "gres": "gpu:1",
     "mem": "64G",
-    "time": "06:00:00",  # Will be adjusted for test runs
-    "max_concurrent": 20,  # Limit concurrent array tasks
+    "time": "06:00:00",
+    "max_concurrent": 50,
 }
 
-# Training parameters (defaults, can be overridden)
+# Training parameters
 DEFAULT_TRAINING_PARAMS = {
     "learning_rate": 5e-4,
-    "batch_sizes": [16, 32, 48],  # Multiple batch sizes
-    "num_runs": 3,  # Number of runs per experiment
     "weight_decay": 1e-9,
     "image_size": 224,
-    "operation": "both",
-    "kernel_size": 3,
-    "delta": 1e-5,
-    "max_grad_norm": 1.0,
+    "batch_sizes": [16, 32, 48],
+    "num_runs": 2,
+    "operations": ["both", "close", "open"],
+    "kernel_sizes": [3, 5, 7],
 }
 
 
@@ -69,6 +51,8 @@ def build_training_command(
     iterations: int,
     batch_size: int,
     run_number: int,
+    operation: str = None,
+    kernel_size: int = None,
 ) -> str:
     """Build the Python training command for a single experiment."""
     n_classes = DATASET_CONFIG[dataset]["n_classes"]
@@ -87,8 +71,10 @@ def build_training_command(
     ]
 
     if morphology:
-        python_args.append(f"--operation {DEFAULT_TRAINING_PARAMS['operation']}")
-        python_args.append(f"--kernel_size {DEFAULT_TRAINING_PARAMS['kernel_size']}")
+        if operation:
+            python_args.append(f"--operation {operation}")
+        if kernel_size:
+            python_args.append(f"--kernel_size {kernel_size}")
 
     if dpsgd:
         python_args.append("--DPSGD True")
@@ -137,6 +123,8 @@ def generate_all_experiments(
     clipping_filter: str = None,
     num_runs: int = None,
     batch_sizes: List[int] = None,
+    operations: List[str] = None,
+    kernel_sizes: List[int] = None,
 ) -> List[Dict]:
     """
     Generate all experiment configurations.
@@ -146,6 +134,9 @@ def generate_all_experiments(
         iterations: Number of iterations
         model_filter: If provided, only generate experiments for this model
         clipping_filter: If provided, only generate experiments for this clipping strategy (DP only)
+        batch_sizes: List of batch sizes to use
+        operations: List of morphological operations to use (when morphology=True)
+        kernel_sizes: List of kernel sizes to use (when morphology=True)
 
     Returns:
         List of experiment configuration dictionaries
@@ -153,11 +144,17 @@ def generate_all_experiments(
     if iterations is None:
         iterations = 20 if test_run else 200
 
-    # Use provided batch_sizes and num_runs or defaults
+    # Use provided parameters or defaults
     batch_sizes_to_use = (
         batch_sizes if batch_sizes else DEFAULT_TRAINING_PARAMS["batch_sizes"]
     )
     num_runs_to_use = num_runs if num_runs else DEFAULT_TRAINING_PARAMS["num_runs"]
+    operations_to_use = (
+        operations if operations else DEFAULT_TRAINING_PARAMS["operations"]
+    )
+    kernel_sizes_to_use = (
+        kernel_sizes if kernel_sizes else DEFAULT_TRAINING_PARAMS["kernel_sizes"]
+    )
 
     # Filter models if specified
     models_to_use = (
@@ -173,48 +170,94 @@ def generate_all_experiments(
 
     experiments = []
 
-    # Non-DP experiments (2 per model per dataset) - only if no clipping filter
+    # Non-DP experiments
     if not clipping_filter:
         for dataset in DATASETS:
             for model in models_to_use:
                 for morphology in [False, True]:
-                    # Add batch sizes and runs
-                    for batch_size in batch_sizes_to_use:
-                        for run_number in range(1, num_runs_to_use + 1):
-                            config = {
-                                "model": model,
-                                "dataset": dataset,
-                                "dpsgd": False,
-                                "clipping": "none",
-                                "epsilon": 0,
-                                "morphology": morphology,
-                                "iterations": iterations,
-                                "batch_size": batch_size,
-                                "run_number": run_number,
-                            }
-                            experiments.append(config)
-
-    # DP experiments (2 epsilon × 2 morphology per model per dataset per clipping)
-    for dataset in DATASETS:
-        for model in models_to_use:
-            for clipping in clipping_to_use:
-                for epsilon in EPSILON_VALUES:
-                    for morphology in [False, True]:
-                        # Add batch sizes and runs
+                    if morphology:
+                        # With morphology: iterate over operations and kernel sizes
+                        for operation in operations_to_use:
+                            for kernel_size in kernel_sizes_to_use:
+                                for batch_size in batch_sizes_to_use:
+                                    for run_number in range(1, num_runs_to_use + 1):
+                                        config = {
+                                            "model": model,
+                                            "dataset": dataset,
+                                            "dpsgd": False,
+                                            "clipping": "none",
+                                            "epsilon": 0,
+                                            "morphology": morphology,
+                                            "operation": operation,
+                                            "kernel_size": kernel_size,
+                                            "iterations": iterations,
+                                            "batch_size": batch_size,
+                                            "run_number": run_number,
+                                        }
+                                        experiments.append(config)
+                    else:
+                        # Without morphology: no operation/kernel_size
                         for batch_size in batch_sizes_to_use:
                             for run_number in range(1, num_runs_to_use + 1):
                                 config = {
                                     "model": model,
                                     "dataset": dataset,
-                                    "dpsgd": True,
-                                    "clipping": clipping,
-                                    "epsilon": epsilon,
+                                    "dpsgd": False,
+                                    "clipping": "none",
+                                    "epsilon": 0,
                                     "morphology": morphology,
+                                    "operation": None,
+                                    "kernel_size": None,
                                     "iterations": iterations,
                                     "batch_size": batch_size,
                                     "run_number": run_number,
                                 }
                                 experiments.append(config)
+
+    # DP experiments
+    for dataset in DATASETS:
+        for model in models_to_use:
+            for clipping in clipping_to_use:
+                for epsilon in EPSILON_VALUES:
+                    for morphology in [False, True]:
+                        if morphology:
+                            # With morphology: iterate over operations and kernel sizes
+                            for operation in operations_to_use:
+                                for kernel_size in kernel_sizes_to_use:
+                                    for batch_size in batch_sizes_to_use:
+                                        for run_number in range(1, num_runs_to_use + 1):
+                                            config = {
+                                                "model": model,
+                                                "dataset": dataset,
+                                                "dpsgd": True,
+                                                "clipping": clipping,
+                                                "epsilon": epsilon,
+                                                "morphology": morphology,
+                                                "operation": operation,
+                                                "kernel_size": kernel_size,
+                                                "iterations": iterations,
+                                                "batch_size": batch_size,
+                                                "run_number": run_number,
+                                            }
+                                            experiments.append(config)
+                        else:
+                            # Without morphology: no operation/kernel_size
+                            for batch_size in batch_sizes_to_use:
+                                for run_number in range(1, num_runs_to_use + 1):
+                                    config = {
+                                        "model": model,
+                                        "dataset": dataset,
+                                        "dpsgd": True,
+                                        "clipping": clipping,
+                                        "epsilon": epsilon,
+                                        "morphology": morphology,
+                                        "operation": None,
+                                        "kernel_size": None,
+                                        "iterations": iterations,
+                                        "batch_size": batch_size,
+                                        "run_number": run_number,
+                                    }
+                                    experiments.append(config)
 
     return experiments
 
@@ -378,6 +421,8 @@ def main():
         clipping_filter=args.clipping,
         num_runs=args.num_runs,
         batch_sizes=args.batch_sizes,
+        operations=None,  # Use defaults
+        kernel_sizes=None,  # Use defaults
     )
 
     filter_info = []
@@ -410,6 +455,8 @@ def main():
                 iterations=config["iterations"],
                 batch_size=config["batch_size"],
                 run_number=config["run_number"],
+                operation=config.get("operation"),
+                kernel_size=config.get("kernel_size"),
             )
             f.write(command + "\n")
 
@@ -454,15 +501,16 @@ def main():
         f.write(f"Total Experiments: {len(experiments)}\n")
         f.write(f"Max Concurrent Tasks: {max_concurrent}\n\n")
         f.write(
-            f"{'Task ID':<8} {'Experiment Name':<60} {'Model':<15} {'Dataset':<8} {'DP':<5} {'Clipping':<15} {'Eps':<6} {'Morph':<6} {'Batch':<6} {'Run':<4}\n"
+            f"{'Task ID':<8} {'Experiment Name':<60} {'Model':<15} {'Dataset':<8} {'DP':<5} {'Clipping':<15} {'Eps':<6} {'Morph':<6} {'Op':<10} {'Kernel':<7} {'Batch':<6} {'Run':<4}\n"
         )
-        f.write(f"{'-'*140}\n")
+        f.write(f"{'-'*160}\n")
 
         for task_id, exp_name, config in experiment_names:
             f.write(
                 f"{task_id:<8} {exp_name:<60} {config['model']:<15} {config['dataset']:<8} "
                 f"{str(config['dpsgd']):<5} {config['clipping']:<15} "
                 f"{str(config['epsilon']):<6} {str(config['morphology']):<6} "
+                f"{str(config.get('operation', 'N/A')):<10} {str(config.get('kernel_size', 'N/A')):<7} "
                 f"{config['batch_size']:<6} {config['run_number']:<4}\n"
             )
 
