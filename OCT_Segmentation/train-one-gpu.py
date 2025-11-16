@@ -351,7 +351,16 @@ def segmentation_plots_test_morphology(val_loader, model, device,model_name,DPSG
             batch_processed += 1
 
 
-def segmentation_plots(val_loader, model, device, model_name, DPSGD, dataset, num_examples=5, batch_size=16, run_number=1, clipping_strategy='none', epsilon=0, morphology=False):  # this version can work after applying morphological approach or normal cases without applying any morphological technique  (because after applying morphology then prediction of the model is the result of morphology)
+def segmentation_plots(data_loader, model, device, model_name, DPSGD, dataset, stage='validation', num_examples=5, batch_size=16, run_number=1, clipping_strategy='none', epsilon=0, morphology=False, operation='both', kernel_size=3):
+    """
+    Save segmentation plots organized by stage (validation or test).
+    
+    Args:
+        data_loader: validation or test data loader
+        stage: 'validation' or 'test'
+        operation: morphological operation (when morphology=True)
+        kernel_size: kernel size for morphological operation (when morphology=True)
+    """
     # Build directory structure matching results structure
     results_dir = "results"
     dataset_dir = os.path.join(results_dir, dataset)
@@ -362,16 +371,22 @@ def segmentation_plots(val_loader, model, device, model_name, DPSGD, dataset, nu
         else:
             clipping_dir = os.path.join(dp_dir, clipping_strategy)
         epsilon_dir = os.path.join(clipping_dir, f"epsilon_{int(epsilon) if epsilon else 8}")
-        morph_dir = os.path.join(epsilon_dir, "with_morph" if morphology else "no_morph")
+        if morphology:
+            morph_dir = os.path.join(epsilon_dir, "with_morph", operation, f"kernel_{kernel_size}")
+        else:
+            morph_dir = os.path.join(epsilon_dir, "no_morph")
     else:
         non_dp_dir = os.path.join(dataset_dir, "non_dp")
-        morph_dir = os.path.join(non_dp_dir, "with_morph" if morphology else "no_morph")
-    # Create plots subdirectory
-    plots_dir = os.path.join(morph_dir, "plots")
+        if morphology:
+            morph_dir = os.path.join(non_dp_dir, "with_morph", operation, f"kernel_{kernel_size}")
+        else:
+            morph_dir = os.path.join(non_dp_dir, "no_morph")
+    # Create stage-specific plots subdirectory with run-wise folders
+    plots_dir = os.path.join(morph_dir, stage, "plots", f"run{run_number}")
     os.makedirs(plots_dir, exist_ok=True)
     batch_processed = 0
     model.eval()
-    for imgs, masks in val_loader:
+    for imgs, masks in data_loader:
         imgs, masks = imgs.to(device), masks.to(device)
         with torch.no_grad():  # We do not need to compute gradients here
             preds = model(imgs)
@@ -443,9 +458,9 @@ def segmentation_plots(val_loader, model, device, model_name, DPSGD, dataset, nu
 
             plt.axis('off')
 
-            # Save plot to proper directory structure
+            # Save plot to run-wise folder (removed run_number from filename since it's in folder name)
             model_name_lower = model_name.lower()
-            file_path = os.path.join(plots_dir, f'{model_name_lower}_batch{batch_size}_run{run_number}_example_{batch_processed}.png')
+            file_path = os.path.join(plots_dir, f'{model_name_lower}_batch{batch_size}_example_{batch_processed}.png')
             plt.savefig(file_path, format='png', bbox_inches='tight', dpi=150)
             plt.close()  # Close figure to free memory
             batch_processed += 1
@@ -484,7 +499,17 @@ def get_files(path, ext):
     return [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f)) and f.endswith(ext)]
 
 
-def save_results_to_csv(args,file_name,max_grad_norm,noise_multiplier, model_name, learning_rate, batch_size, training_losses, validation_losses,dice_all, validation_dice_scores, privacy_epsilons,iterations,dataset,mae,per_layer_all_list,clipping_strategy='none'):
+def save_results_to_csv(args, stage, max_grad_norm, noise_multiplier, model_name, learning_rate, batch_size, 
+                        training_losses, loss_value, dice_all, dice_score, privacy_epsilons, iterations, 
+                        dataset, mae, per_layer_all_list, clipping_strategy='none'):
+    """
+    Save results to CSV files organized by stage (validation or test).
+    
+    Args:
+        stage: 'validation' or 'test'
+        loss_value: validation_loss or test_loss
+        dice_score: validation_dice or test_dice
+    """
     # Build directory structure based on experimental strategy
     results_dir = "results"
     dataset_dir = os.path.join(results_dir, dataset)
@@ -495,15 +520,28 @@ def save_results_to_csv(args,file_name,max_grad_norm,noise_multiplier, model_nam
         else:
             clipping_dir = os.path.join(dp_dir, clipping_strategy)
         epsilon_dir = os.path.join(clipping_dir, f"epsilon_{int(privacy_epsilons) if privacy_epsilons else 8}")
-        morph_dir = os.path.join(epsilon_dir, "with_morph" if args.morphology else "no_morph")
+        if args.morphology:
+            morph_dir = os.path.join(epsilon_dir, "with_morph", args.operation, f"kernel_{args.kernel_size}")
+        else:
+            morph_dir = os.path.join(epsilon_dir, "no_morph")
     else:
         non_dp_dir = os.path.join(dataset_dir, "non_dp")
-        morph_dir = os.path.join(non_dp_dir, "with_morph" if args.morphology else "no_morph")
-    # Create directory structure
-    os.makedirs(morph_dir, exist_ok=True)
-    # Create filename with batch size and run number
+        if args.morphology:
+            morph_dir = os.path.join(non_dp_dir, "with_morph", args.operation, f"kernel_{args.kernel_size}")
+        else:
+            morph_dir = os.path.join(non_dp_dir, "no_morph")
+    
+    # Create stage-specific subdirectory
+    stage_dir = os.path.join(morph_dir, stage)
+    os.makedirs(stage_dir, exist_ok=True)
+    
+    # Create filename with batch size (run_number is a column, not in filename)
     model_name_lower = model_name.lower()
-    file_name = os.path.join(morph_dir, f"{model_name_lower}_batch{batch_size}_run{args.run_number}_results.csv")
+    file_name = os.path.join(stage_dir, f"{model_name_lower}_batch{batch_size}_results.csv")
+    
+    # Global CSV file path (at results root) - separate for validation and test
+    global_csv_path = os.path.join(results_dir, f"all_results_{stage}_global.csv")
+    
     # Prepare data to save in CSV - unified format
     row_data = [
         model_name,
@@ -519,37 +557,45 @@ def save_results_to_csv(args,file_name,max_grad_norm,noise_multiplier, model_nam
         args.run_number,
         iterations,
         training_losses[-1] if training_losses else None,
-        validation_losses[-1] if validation_losses else None,
-        validation_dice_scores[-1] if validation_dice_scores else None,
-        mae[-1] if mae else None,
-        dice_all[-1] if dice_all else None,
-        per_layer_all_list[-1] if per_layer_all_list else None,
+        loss_value,  # validation_loss or test_loss
+        dice_score,  # validation_dice or test_dice
+        mae,
+        dice_all if isinstance(dice_all, str) else str(dice_all.tolist()) if hasattr(dice_all, 'tolist') else dice_all,
+        per_layer_all_list if isinstance(per_layer_all_list, str) else str(per_layer_all_list.tolist()) if hasattr(per_layer_all_list, 'tolist') else per_layer_all_list,
         max_grad_norm,
-        noise_multiplier
+        noise_multiplier,
+        stage  # Add stage column
     ]
 
-    # Check if the CSV file exists
-    file_exists = os.path.isfile(file_name)
+    # CSV header with stage column
+    header = ["Model_Name", "Dataset", "DPSGD", "Clipping_Strategy", "Epsilon", 
+              "Morphology", "Operation", "Kernel_Size", "Learning_Rate", "Batch_Size", 
+              "Run_Number", "Iterations", "Training_Loss", f"{stage.capitalize()}_Loss", f"{stage.capitalize()}_Dice", 
+              "MAE", "Dice_All", "Per_Layer_Dice", "Max_Grad_Norm", "Noise_Multiplier", "Stage"]
 
     try:
-        # Open the file for appending (or create it if it doesn't exist)
+        # Save to per-experiment CSV
+        file_exists = os.path.isfile(file_name)
         with open(file_name, 'a', newline='') as file:
             writer = csv.writer(file)
             if not file_exists:
-                # Write the header only if the file doesn't exist - unified header
-                writer.writerow(
-                    ["Model_Name", "Dataset", "DPSGD", "Clipping_Strategy", "Epsilon", 
-                     "Morphology", "Operation", "Kernel_Size", "Learning_Rate", "Batch_Size", 
-                     "Run_Number", "Iterations", "Training_Loss", "Validation_Loss", "Validation_Dice", 
-                     "MAE", "Dice_All", "Per_Layer_Dice", "Max_Grad_Norm", "Noise_Multiplier"])
-            # Write the row of data
+                writer.writerow(header)
             writer.writerow(row_data)
-
-        # Get the absolute path of the
-        file_path = os.path.abspath(file_name)
-        print(f"Results saved to {file_path}")
+        
+        print(f"{stage.capitalize()} results saved to {os.path.abspath(file_name)}")
+        
+        # Save to global CSV
+        global_file_exists = os.path.isfile(global_csv_path)
+        with open(global_csv_path, 'a', newline='') as file:
+            writer = csv.writer(file)
+            if not global_file_exists:
+                writer.writerow(header)
+            writer.writerow(row_data)
+        
+        print(f"{stage.capitalize()} results also saved to global CSV: {os.path.abspath(global_csv_path)}")
+        
     except Exception as e:
-        print(f"Failed to save results to CSV: {e}")
+        print(f"Failed to save {stage} results to CSV: {e}")
 
 def eval(val_loader, criterion, model, n_classes, dice_s=True, device="cuda", im_save=False):
 
@@ -721,7 +767,7 @@ def train(args):
         delta = 1e-5
         privacy_engine = PrivacyEngine()
         noise_multiplier = 1
-        max_grad_norm = 1
+        max_grad_norm = 2
         model_name=f"{args.model_name}_DPSGD_{args.clipping}"
 
         """model, optimizer, data_loader = privacy_engine.make_private(
@@ -904,82 +950,107 @@ def train(args):
     print(f" validation dice score:{validation_dice_scores}")
 
 
-    # privacy_epsilons_str = ""
-    if not test:
+    # Always save validation results after training
+    print("Best iteration: ", best_iter, "Best val dice: ", max_dice)
 
-        print("Best iteration: ", best_iter, "Best val dice: ", max_dice)
+    if args.DPSGD == True:
+        privacy_epsilon = privacy_epsilons[-1]
+        clipping_strategy = args.clipping
+    else:
+        privacy_epsilon = 0
+        clipping_strategy = 'none'
 
-        if args.DPSGD== True:
-            privacy_epsilon= privacy_epsilons[-1]
-            clipping_strategy = args.clipping
-        else:
-            privacy_epsilon=0
-            clipping_strategy = 'none'
+    # Save validation results
+    print("\n=== Saving Validation Results ===")
+    save_results_to_csv(
+        args=args,
+        stage='validation',
+        max_grad_norm=max_grad_norm,
+        noise_multiplier=noise_multiplier,
+        model_name=model_name,
+        learning_rate=learning_rate,
+        batch_size=batch_size,
+        training_losses=training_losses,
+        loss_value=validation_losses[-1] if validation_losses else None,
+        dice_all=dice_all_list[-1] if dice_all_list else None,
+        dice_score=validation_dice_scores[-1] if validation_dice_scores else None,
+        privacy_epsilons=privacy_epsilon,
+        iterations=iterations,
+        dataset=args.dataset,
+        mae=mae_all[-1] if mae_all else None,
+        per_layer_all_list=per_layer_all_list[-1] if per_layer_all_list else None,
+        clipping_strategy=clipping_strategy
+    )
+    
+    # Save validation plots
+    print("Saving validation plots...")
+    segmentation_plots(
+        data_loader=val_loader,
+        model=model,
+        device=device,
+        model_name=model_name,
+        DPSGD=args.DPSGD,
+        dataset=args.dataset,
+        stage='validation',
+        num_examples=20,
+        batch_size=batch_size,
+        run_number=args.run_number,
+        clipping_strategy=clipping_strategy,
+        epsilon=privacy_epsilon,
+        morphology=args.morphology,
+        operation=args.operation if args.morphology else 'both',
+        kernel_size=args.kernel_size if args.morphology else 3
+    )
+    print("Validation results and plots saved!")
 
+    # Always run test evaluation
+    print("\n=== Running Test Evaluation ===")
+    dice_test, test_loss, dice_all_test, mae_test, per_layer_all_test = eval(
+        test_loader, criterion_seg, model, dice_s=True, n_classes=n_classes
+    )
 
-        # Unified file naming
-        file_name='oct_results_comprehensive.csv'
-        save_results_to_csv(args,
-            file_name,
-            max_grad_norm,
-            noise_multiplier,
-            model_name,
-            learning_rate,
-            batch_size,
-            training_losses,
-            validation_losses,
-            dice_all_list,
-            validation_dice_scores,
-            privacy_epsilon,
-            iterations,
-            args.dataset,
-            mae_all,
-            per_layer_all_list,
-            clipping_strategy
-
-
-
-        )
-        print("saving has finished")
-        segmentation_plots(val_loader, model, device, model_name, args.DPSGD, args.dataset, 
-                          num_examples=20, batch_size=batch_size, run_number=args.run_number,
-                          clipping_strategy=clipping_strategy, epsilon=privacy_epsilon, morphology=args.morphology)
-
-
-    if test:
-
-        dice_test, test_loss, dice_all_test,mae_test,per_layer_all_test =eval(test_loader, criterion_seg, model, dice_s=True, n_classes=n_classes)
-
-        if args.DPSGD == True:
-            privacy_epsilon = privacy_epsilons[-1]
-            clipping_strategy = args.clipping
-        else:
-            privacy_epsilon = 0 # None
-            clipping_strategy = 'none'
-
-        file_name='oct_results_comprehensive_test.csv'
-        save_results_to_csv(args,
-            file_name,
-            max_grad_norm,
-            noise_multiplier,
-            model_name,
-            learning_rate,
-            batch_size,
-            training_losses,
-            [test_loss],
-            dice_all,
-            [dice_test],
-            privacy_epsilon,
-            iterations,
-            args.dataset,
-            mae_test,
-            per_layer_all_test,
-            clipping_strategy
-        )
-
-
-        # plotting
-        #segmentation_plots(test_loader, model, device, model_name,args.DPSGD,args.dataset,num_examples=20)
+    # Save test results
+    print("\n=== Saving Test Results ===")
+    save_results_to_csv(
+        args=args,
+        stage='test',
+        max_grad_norm=max_grad_norm,
+        noise_multiplier=noise_multiplier,
+        model_name=model_name,
+        learning_rate=learning_rate,
+        batch_size=batch_size,
+        training_losses=training_losses,
+        loss_value=test_loss,
+        dice_all=dice_all_test,
+        dice_score=dice_test.item() if hasattr(dice_test, 'item') else dice_test,
+        privacy_epsilons=privacy_epsilon,
+        iterations=iterations,
+        dataset=args.dataset,
+        mae=mae_test,
+        per_layer_all_list=per_layer_all_test,
+        clipping_strategy=clipping_strategy
+    )
+    
+    # Save test plots
+    print("Saving test plots...")
+    segmentation_plots(
+        data_loader=test_loader,
+        model=model,
+        device=device,
+        model_name=model_name,
+        DPSGD=args.DPSGD,
+        dataset=args.dataset,
+        stage='test',
+        num_examples=20,
+        batch_size=batch_size,
+        run_number=args.run_number,
+        clipping_strategy=clipping_strategy,
+        epsilon=privacy_epsilon,
+        morphology=args.morphology,
+        operation=args.operation if args.morphology else 'both',
+        kernel_size=args.kernel_size if args.morphology else 3
+    )
+    print("Test results and plots saved!")
     print(f" training loss:{training_losses}")
     print(f" validation loss:{validation_losses}")
 
