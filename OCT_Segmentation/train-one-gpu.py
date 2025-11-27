@@ -1167,26 +1167,26 @@ def train(args):
     )
 
     # Save validation plots
-    print("Saving validation plots...")
-    segmentation_plots(
-        data_loader=val_loader,
-        model=model,
-        device=device,
-        model_name=model_name,
-        DPSGD=args.DPSGD,
-        dataset=args.dataset,
-        stage="validation",
-        num_examples=20,
-        batch_size=batch_size,
-        run_number=args.run_number,
-        clipping_strategy=clipping_strategy,
-        epsilon=privacy_epsilon,
-        morphology=args.morphology,
-        operation=args.operation if args.morphology else "both",
-        kernel_size=args.kernel_size if args.morphology else 3,
-    )
-    print("Validation results and plots saved!")
-
+    # print("Saving validation plots...")
+    # segmentation_plots(
+    #     data_loader=val_loader,
+    #     model=model,
+    #     device=device,
+    #     model_name=model_name,
+    #     DPSGD=args.DPSGD,
+    #     dataset=args.dataset,
+    #     stage="validation",
+    #     num_examples=20,
+    #     batch_size=batch_size,
+    #     run_number=args.run_number,
+    #     clipping_strategy=clipping_strategy,
+    #     epsilon=privacy_epsilon,
+    #     morphology=args.morphology,
+    #     operation=args.operation if args.morphology else "both",
+    #     kernel_size=args.kernel_size if args.morphology else 3,
+    # )
+    # print("Validation results and plots saved!")
+ 
     # Always run test evaluation
     print("\n=== Running Test Evaluation ===")
     dice_test, test_loss, dice_all_test, mae_test, per_layer_all_test = eval(
