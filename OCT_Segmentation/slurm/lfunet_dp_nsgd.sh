@@ -2,9 +2,9 @@
 #SBATCH --job-name=lfunet_dp_nsgd
 #SBATCH --output=/scicore/home/wagner0024/shandi0000/2025-msc-parth-shandilya/code/dp-morph/OCT_Segmentation/slurm/logs/lfunet-dp-nsgd/lfunet_dp_nsgd_%A_%a.out
 #SBATCH --error=/scicore/home/wagner0024/shandi0000/2025-msc-parth-shandilya/code/dp-morph/OCT_Segmentation/slurm/logs/lfunet-dp-nsgd/lfunet_dp_nsgd_%A_%a.err
-#SBATCH --time=06:00:00
+#SBATCH --time=01:00:00
 #SBATCH --mem=64G
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=2
 #SBATCH --gres=gpu:1
 #SBATCH --partition=a100-80g
 #SBATCH --qos=gpu6hours
