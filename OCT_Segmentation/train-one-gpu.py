@@ -901,6 +901,8 @@ def train(args):
     # visualize_batch(images, labels)
     # break
 
+    # Default start_iteration
+    start_iteration = 1
     if args.model_should_be_load:
         if os.path.exists(save_name):
             checkpoint = torch.load(save_name)
@@ -926,9 +928,8 @@ def train(args):
                 "consecutive_epochs_without_improvement"
             ]
             print(f"Resuming training from iteration {start_iteration}")
-
-    else:
-        start_iteration = 1
+        else:
+            print(f"Model file {save_name} not found, starting from scratch")
 
     # delta = 1 / (number_of_images ** 1.1)
     if args.DPSGD == True:
