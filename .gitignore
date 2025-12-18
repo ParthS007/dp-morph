@@ -29,6 +29,7 @@ Thumbs.db
 fast_differential_privacy/
 legacy_archive/
 OCT_Segmentation/results/
+OCT_Segmentation/pre-final-results/
 OCT_Segmentation/slurm_jobs/
 core.*
 *.err
