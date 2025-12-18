@@ -746,6 +746,7 @@ def eval(
     counter = 0
     dice = 0
     mae = 0
+    mae_9layer_sum = 0
 
     dice_all = np.zeros(n_classes)
     per_layer_all = np.zeros(n_classes)
@@ -782,11 +783,14 @@ def eval(
             ).squeeze()
             label_mae = label_mae.permute(0, 3, 1, 2)
             # init_mae,per_layer = MAE(label,pred, n_classes=args.n_classes)
-            init_mae, per_layer = MAE_New(label_mae, pred, n_classes=args.n_classes)
+            # Calculate both 7-layer MAE (retinal layers only) and 9-layer MAE (all classes)
+            init_mae_7layer, per_layer = MAE_New(label_mae, pred, n_classes=args.n_classes, classes=list(range(1, 8)))
+            init_mae_9layer, _ = MAE_New(label_mae, pred, n_classes=args.n_classes, classes=None)
             # init_mae_new = mae_new(label_mae, pred)
 
-            mae += init_mae.item()
-            print(f"MAE in this step: {init_mae}")
+            mae += init_mae_7layer.item()
+            mae_9layer_sum += init_mae_9layer.item()
+            print(f"MAE 7-layer: {init_mae_7layer.item():.6f}, MAE 9-layer: {init_mae_9layer.item():.6f}")
             # print(f"MAE in new step: {init_mae_new}")
             print(f"MAE per layer: {per_layer}")
             # print(f"MAE per layer new: {per_layer_new}")
@@ -797,23 +801,28 @@ def eval(
         loss = loss / counter
         dice = dice / counter
         dice_all = dice_all / counter
-        print(f" dice_all: {dice_all}")
+        # Calculate 7-layer dice (layers 1-7, excluding background=0 and fluid=8)
+        retinal_dice_7 = dice_all[1:8].mean()
+        retinal_dice_9 = dice_all.mean()
         per_layer_all = per_layer_all / counter
-        mae = mae / counter
+        mae_7layer = mae / counter
+        mae_9layer = mae_9layer_sum / counter
 
-        print(
-            "Validation loss: ",
-            loss,
-            " Mean Dice: ",
-            dice,
-            "Dice All:",
-            dice_all,
-            "MAE: ",
-            mae,
-            "per layer: ",
-            per_layer_all,
-        )
-        return dice, loss, dice_all, mae, per_layer_all
+        print(f"\n{'='*60}")
+        print(f"VALIDATION SUMMARY")
+        print(f"{'='*60}")
+        print(f"Loss: {loss:.4f}")
+        print(f"\n7-Layer Metrics (retinal layers 1-7 only):")
+        print(f"  Dice: {retinal_dice_7:.4f}")
+        print(f"  MAE:  {mae_7layer:.6f}")
+        print(f"\n9-Layer Metrics (all classes including background & fluid):")
+        print(f"  Dice: {retinal_dice_9:.4f}")
+        print(f"  MAE:  {mae_9layer:.6f}")
+        print(f"\nPer-class Dice: {dice_all}")
+        print(f"Per-class MAE:  {per_layer_all}")
+        print(f"{'='*60}\n")
+        
+        return retinal_dice_7, loss, dice_all, mae_7layer, per_layer_all
 
 
 def train(args):
