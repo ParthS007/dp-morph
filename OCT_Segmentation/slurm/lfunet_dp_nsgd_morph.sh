@@ -8,7 +8,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=a100-80g
 #SBATCH --qos=gpu6hours
-#SBATCH --array=1-144%50
+#SBATCH --array=1-24%5
 
 # Create logs directory if it doesn't exist
 mkdir -p /scicore/home/wagner0024/shandi0000/2025-msc-parth-shandilya/code/dp-morph/OCT_Segmentation/slurm/logs/lfunet-dp-nsgd-morph

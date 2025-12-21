@@ -56,12 +56,12 @@ def argument_parser():
     # Add all arguments upfront
     parser.add_argument("--dataset", default="Duke", choices=["Duke", "UMN"])
 
-    parser.add_argument("--batch_size", default=16, type=int)
-    parser.add_argument("--num_iterations", default=200, type=int)
-    parser.add_argument("--learning_rate", default=5e-4, type=float)
+    parser.add_argument("--batch_size", default=8, type=int)
+    parser.add_argument("--num_iterations", default=100, type=int)
+    parser.add_argument("--learning_rate", default=0.001, type=float)
     parser.add_argument("--n_classes", default=9, type=int)
     parser.add_argument("--ffc_lambda", default=0, type=float)
-    parser.add_argument("--weight_decay", default=1e-9, type=float)
+    parser.add_argument("--weight_decay", default=1e-4, type=float)
     parser.add_argument("--image_size", default="224", type=int)
     parser.add_argument(
         "--model_name",
@@ -108,6 +108,18 @@ def argument_parser():
         help="both, close, open, dilation, erosion",
     )
     parser.add_argument("--kernel_size", default=3, type=int, help="kernel size")
+    parser.add_argument(
+        "--smart_morphology",
+        default=True,
+        type=str2bool,
+        help="Apply morphology only to specific layers instead of all layers",
+    )
+    parser.add_argument(
+        "--morph_layers",
+        default="3,4,5",
+        type=str,
+        help="Comma-separated list of layer indices to apply smart morphology (e.g., '3,4,5')",
+    )
     parser.add_argument(
         "--clipping",
         default="flat",
@@ -226,6 +238,67 @@ def apply_kornia_morphology_multiclass(
         refined_mask = pred_mask
     else:
         raise ValueError("open", "close", "both", "none", "dilation", "erosion")
+    return refined_mask
+
+
+def apply_smart_morphology(
+    pred_mask: torch.Tensor,
+    operation: str = "open",
+    kernel_size: int = 3,
+    target_layers: list = [3, 4, 5],
+) -> torch.Tensor:
+    """
+    Apply morphological operations only to specific layers/channels.
+
+    This "smart" approach avoids disrupting well-performing layers while
+    potentially improving layers that struggle (e.g., INL, OPL).
+
+    Args:
+        pred_mask (torch.Tensor): Multi-class mask of shape [B, C, H, W], where C = num_classes.
+        operation (str): 'open', 'close', 'both', 'dilation', 'erosion', or 'none'.
+        kernel_size (int): Size of the structuring element.
+        target_layers (list): List of layer indices to apply morphology to.
+
+    Returns:
+        torch.Tensor: Refined multi-class mask of shape [B, C, H, W].
+    """
+    if operation == "none":
+        return pred_mask
+
+    if operation not in ["open", "close", "both", "dilation", "erosion"]:
+        raise ValueError(
+            "Operation must be one of 'open', 'close', 'both', 'dilation', 'erosion', or 'none'."
+        )
+
+    kernel = torch.ones(kernel_size, kernel_size).to(pred_mask.device)
+
+    # Clone the input to avoid modifying in place
+    refined_mask = pred_mask.clone()
+
+    # Apply morphology only to target layers
+    for layer_idx in target_layers:
+        if layer_idx >= pred_mask.shape[1]:
+            continue  # Skip if layer index is out of bounds
+
+        # Extract the layer: [B, 1, H, W]
+        layer = pred_mask[:, layer_idx : layer_idx + 1, :, :]
+
+        # Apply the morphological operation
+        if operation == "dilation":
+            refined_layer = dilation(layer, kernel)
+        elif operation == "open":
+            refined_layer = opening(layer, kernel)
+        elif operation == "close":
+            refined_layer = closing(layer, kernel)
+        elif operation == "erosion":
+            refined_layer = erosion(layer, kernel)
+        elif operation == "both":
+            refined_layer = opening(layer, kernel)
+            refined_layer = closing(refined_layer, kernel)
+
+        # Replace the layer in the output
+        refined_mask[:, layer_idx : layer_idx + 1, :, :] = refined_layer
+
     return refined_mask
 
 
@@ -420,6 +493,8 @@ def segmentation_plots(
     morphology=False,
     operation="both",
     kernel_size=3,
+    smart_morphology=False,
+    morph_layers="3,4,5",
 ):
     """
     Save segmentation plots organized by stage (validation or test).
@@ -429,6 +504,8 @@ def segmentation_plots(
         stage: 'validation' or 'test'
         operation: morphological operation (when morphology=True)
         kernel_size: kernel size for morphological operation (when morphology=True)
+        smart_morphology: whether to apply morphology only to specific layers
+        morph_layers: comma-separated list of layer indices for smart morphology
     """
     # Build directory structure matching results structure
     results_dir = "results"
@@ -443,17 +520,35 @@ def segmentation_plots(
             clipping_dir, f"epsilon_{int(epsilon) if epsilon else 8}"
         )
         if morphology:
-            morph_dir = os.path.join(
-                epsilon_dir, "with_morph", operation, f"kernel_{kernel_size}"
-            )
+            if smart_morphology:
+                morph_dir = os.path.join(
+                    epsilon_dir,
+                    "smart_morph",
+                    operation,
+                    f"kernel_{kernel_size}",
+                    f"layers_{morph_layers.replace(',', '-')}",
+                )
+            else:
+                morph_dir = os.path.join(
+                    epsilon_dir, "with_morph", operation, f"kernel_{kernel_size}"
+                )
         else:
             morph_dir = os.path.join(epsilon_dir, "no_morph")
     else:
         non_dp_dir = os.path.join(dataset_dir, "non_dp")
         if morphology:
-            morph_dir = os.path.join(
-                non_dp_dir, "with_morph", operation, f"kernel_{kernel_size}"
-            )
+            if smart_morphology:
+                morph_dir = os.path.join(
+                    non_dp_dir,
+                    "smart_morph",
+                    operation,
+                    f"kernel_{kernel_size}",
+                    f"layers_{morph_layers.replace(',', '-')}",
+                )
+            else:
+                morph_dir = os.path.join(
+                    non_dp_dir, "with_morph", operation, f"kernel_{kernel_size}"
+                )
         else:
             morph_dir = os.path.join(non_dp_dir, "no_morph")
     # Create stage-specific plots subdirectory with run-wise folders
@@ -621,17 +716,41 @@ def save_results_to_csv(
             clipping_dir, f"epsilon_{int(privacy_epsilons) if privacy_epsilons else 8}"
         )
         if args.morphology:
-            morph_dir = os.path.join(
-                epsilon_dir, "with_morph", args.operation, f"kernel_{args.kernel_size}"
-            )
+            if args.smart_morphology:
+                morph_dir = os.path.join(
+                    epsilon_dir,
+                    "smart_morph",
+                    args.operation,
+                    f"kernel_{args.kernel_size}",
+                    f"layers_{args.morph_layers.replace(',', '-')}",
+                )
+            else:
+                morph_dir = os.path.join(
+                    epsilon_dir,
+                    "with_morph",
+                    args.operation,
+                    f"kernel_{args.kernel_size}",
+                )
         else:
             morph_dir = os.path.join(epsilon_dir, "no_morph")
     else:
         non_dp_dir = os.path.join(dataset_dir, "non_dp")
         if args.morphology:
-            morph_dir = os.path.join(
-                non_dp_dir, "with_morph", args.operation, f"kernel_{args.kernel_size}"
-            )
+            if args.smart_morphology:
+                morph_dir = os.path.join(
+                    non_dp_dir,
+                    "smart_morph",
+                    args.operation,
+                    f"kernel_{args.kernel_size}",
+                    f"layers_{args.morph_layers.replace(',', '-')}",
+                )
+            else:
+                morph_dir = os.path.join(
+                    non_dp_dir,
+                    "with_morph",
+                    args.operation,
+                    f"kernel_{args.kernel_size}",
+                )
         else:
             morph_dir = os.path.join(non_dp_dir, "no_morph")
 
@@ -658,6 +777,8 @@ def save_results_to_csv(
         args.morphology,
         args.operation if args.morphology else "none",
         args.kernel_size if args.morphology else 0,
+        args.smart_morphology if args.morphology else False,
+        args.morph_layers if (args.morphology and args.smart_morphology) else "none",
         learning_rate,
         batch_size,
         args.run_number,
@@ -695,6 +816,8 @@ def save_results_to_csv(
         "Morphology",
         "Operation",
         "Kernel_Size",
+        "Smart_Morphology",
+        "Morph_Layers",
         "Learning_Rate",
         "Batch_Size",
         "Run_Number",
@@ -784,13 +907,19 @@ def eval(
             label_mae = label_mae.permute(0, 3, 1, 2)
             # init_mae,per_layer = MAE(label,pred, n_classes=args.n_classes)
             # Calculate both 7-layer MAE (retinal layers only) and 9-layer MAE (all classes)
-            init_mae_7layer, per_layer = MAE_New(label_mae, pred, n_classes=args.n_classes, classes=list(range(1, 8)))
-            init_mae_9layer, _ = MAE_New(label_mae, pred, n_classes=args.n_classes, classes=None)
+            init_mae_7layer, per_layer = MAE_New(
+                label_mae, pred, n_classes=args.n_classes, classes=list(range(1, 8))
+            )
+            init_mae_9layer, _ = MAE_New(
+                label_mae, pred, n_classes=args.n_classes, classes=None
+            )
             # init_mae_new = mae_new(label_mae, pred)
 
             mae += init_mae_7layer.item()
             mae_9layer_sum += init_mae_9layer.item()
-            print(f"MAE 7-layer: {init_mae_7layer.item():.6f}, MAE 9-layer: {init_mae_9layer.item():.6f}")
+            print(
+                f"MAE 7-layer: {init_mae_7layer.item():.6f}, MAE 9-layer: {init_mae_9layer.item():.6f}"
+            )
             # print(f"MAE in new step: {init_mae_new}")
             print(f"MAE per layer: {per_layer}")
             # print(f"MAE per layer new: {per_layer_new}")
@@ -821,7 +950,7 @@ def eval(
         print(f"\nPer-class Dice: {dice_all}")
         print(f"Per-class MAE:  {per_layer_all}")
         print(f"{'='*60}\n")
-        
+
         return retinal_dice_7, loss, dice_all, mae_7layer, per_layer_all
 
 
@@ -1017,9 +1146,21 @@ def train(args):
             # print(pred.shape)
             # print(label.squeeze(1).shape)
             if args.morphology:
-                pred = apply_kornia_morphology_multiclass(
-                    pred, operation=args.operation, kernel_size=args.kernel_size
-                )
+                if args.smart_morphology:
+                    # Parse target layers from comma-separated string
+                    target_layers = [
+                        int(x.strip()) for x in args.morph_layers.split(",")
+                    ]
+                    pred = apply_smart_morphology(
+                        pred,
+                        operation=args.operation,
+                        kernel_size=args.kernel_size,
+                        target_layers=target_layers,
+                    )
+                else:
+                    pred = apply_kornia_morphology_multiclass(
+                        pred, operation=args.operation, kernel_size=args.kernel_size
+                    )
 
             loss = criterion_seg(pred, label.squeeze(1), device=device)
             optimizer.zero_grad()  # zero_grad clears old gradients from the last step (otherwise you’d just accumulate the gradients from all loss.backward() calls).
@@ -1194,9 +1335,11 @@ def train(args):
     #     morphology=args.morphology,
     #     operation=args.operation if args.morphology else "both",
     #     kernel_size=args.kernel_size if args.morphology else 3,
+    #     smart_morphology=args.smart_morphology if args.morphology else False,
+    #     morph_layers=args.morph_layers if (args.morphology and args.smart_morphology) else "3,4,5",
     # )
     # print("Validation results and plots saved!")
- 
+
     # Always run test evaluation
     print("\n=== Running Test Evaluation ===")
     dice_test, test_loss, dice_all_test, mae_test, per_layer_all_test = eval(
@@ -1243,6 +1386,12 @@ def train(args):
         morphology=args.morphology,
         operation=args.operation if args.morphology else "both",
         kernel_size=args.kernel_size if args.morphology else 3,
+        smart_morphology=args.smart_morphology if args.morphology else False,
+        morph_layers=(
+            args.morph_layers
+            if (args.morphology and args.smart_morphology)
+            else "3,4,5"
+        ),
     )
     print("Test results and plots saved!")
     print(f" training loss:{training_losses}")
