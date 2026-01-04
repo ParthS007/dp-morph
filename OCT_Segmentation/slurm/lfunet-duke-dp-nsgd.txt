@@ -1,0 +1,8 @@
+python train-one-gpu.py --model_name LFUNet --dataset Duke --morphology False --DPSGD True --epsilon 8 --clipping normalized_sgd --batch_size 8 --run_number 1
+python train-one-gpu.py --model_name LFUNet --dataset Duke --morphology False --DPSGD True --epsilon 8 --clipping normalized_sgd --batch_size 8 --run_number 2
+python train-one-gpu.py --model_name LFUNet --dataset Duke --morphology False --DPSGD True --epsilon 8 --clipping normalized_sgd --batch_size 16 --run_number 1
+python train-one-gpu.py --model_name LFUNet --dataset Duke --morphology False --DPSGD True --epsilon 8 --clipping normalized_sgd --batch_size 16 --run_number 2
+python train-one-gpu.py --model_name LFUNet --dataset Duke --morphology False --DPSGD True --epsilon 200 --clipping normalized_sgd --batch_size 8 --run_number 1
+python train-one-gpu.py --model_name LFUNet --dataset Duke --morphology False --DPSGD True --epsilon 200 --clipping normalized_sgd --batch_size 8 --run_number 2
+python train-one-gpu.py --model_name LFUNet --dataset Duke --morphology False --DPSGD True --epsilon 200 --clipping normalized_sgd --batch_size 16 --run_number 1
+python train-one-gpu.py --model_name LFUNet --dataset Duke --morphology False --DPSGD True --epsilon 200 --clipping normalized_sgd --batch_size 16 --run_number 2

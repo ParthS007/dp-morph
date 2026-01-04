@@ -1,4 +1,0 @@
-python train-one-gpu.py --model_name LFUNet --morphology False --run_number 1 --DPSGD True --epsilon 8 --clipping normalized_sgd
-python train-one-gpu.py --model_name LFUNet --morphology False --run_number 1 --DPSGD True --epsilon 200 --clipping normalized_sgd
-python train-one-gpu.py --model_name LFUNet --morphology False --run_number 2 --DPSGD True --epsilon 8 --clipping normalized_sgd
-python train-one-gpu.py --model_name LFUNet --morphology False --run_number 2 --DPSGD True --epsilon 200 --clipping normalized_sgd

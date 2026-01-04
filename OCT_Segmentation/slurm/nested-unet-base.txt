@@ -1,2 +1,0 @@
-python train-one-gpu.py --model_name NestedUNet --morphology False --run_number 1 --DPSGD False
-python train-one-gpu.py --model_name NestedUNet --morphology False --run_number 2 --DPSGD False

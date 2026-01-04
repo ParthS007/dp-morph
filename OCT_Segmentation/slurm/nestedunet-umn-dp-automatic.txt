@@ -1,0 +1,8 @@
+python train-one-gpu.py --model_name NestedUNet --dataset UMN --morphology False --DPSGD True --epsilon 8 --clipping automatic --batch_size 8 --run_number 1
+python train-one-gpu.py --model_name NestedUNet --dataset UMN --morphology False --DPSGD True --epsilon 8 --clipping automatic --batch_size 8 --run_number 2
+python train-one-gpu.py --model_name NestedUNet --dataset UMN --morphology False --DPSGD True --epsilon 8 --clipping automatic --batch_size 16 --run_number 1
+python train-one-gpu.py --model_name NestedUNet --dataset UMN --morphology False --DPSGD True --epsilon 8 --clipping automatic --batch_size 16 --run_number 2
+python train-one-gpu.py --model_name NestedUNet --dataset UMN --morphology False --DPSGD True --epsilon 200 --clipping automatic --batch_size 8 --run_number 1
+python train-one-gpu.py --model_name NestedUNet --dataset UMN --morphology False --DPSGD True --epsilon 200 --clipping automatic --batch_size 8 --run_number 2
+python train-one-gpu.py --model_name NestedUNet --dataset UMN --morphology False --DPSGD True --epsilon 200 --clipping automatic --batch_size 16 --run_number 1
+python train-one-gpu.py --model_name NestedUNet --dataset UMN --morphology False --DPSGD True --epsilon 200 --clipping automatic --batch_size 16 --run_number 2
