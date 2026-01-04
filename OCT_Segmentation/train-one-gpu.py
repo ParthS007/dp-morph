@@ -306,6 +306,63 @@ def colored_text(st):
     return "\033[91m" + st + "\033[0m"
 
 
+def get_experiment_name(args):
+    """
+    Generate a flat experiment name following RETFound-style structure.
+
+    Format: {model}-{dataset}-{exp_type}/{run_dir}
+
+    Examples:
+        - unet-duke-dp_flat/bs16_eps8_run1
+        - nestedunet-duke-dp_psac_morph/bs8_eps200_run2_both_k3_layers3-4-5
+        - lfunet-duke-base/bs16_run1
+        - unet-duke-base_morph/bs8_run1_open_k5
+    """
+    # Model name (lowercase)
+    model_short = args.model_name.lower()
+    if model_short == "nestedunet":
+        model_short = "nestedunet"  # Keep consistent
+
+    # Dataset (lowercase)
+    dataset = args.dataset.lower()
+
+    # Experiment type
+    if args.DPSGD:
+        exp_type = f"dp_{args.clipping}"
+        if args.morphology:
+            exp_type += "_morph"
+    elif args.morphology:
+        exp_type = "base_morph"
+    else:
+        exp_type = "base"
+
+    # Group directory
+    group_dir = f"{model_short}-{dataset}-{exp_type}"
+
+    # Run-specific subdirectory
+    if args.DPSGD:
+        run_dir = f"bs{args.batch_size}_eps{int(args.epsilon)}_run{args.run_number}"
+    else:
+        run_dir = f"bs{args.batch_size}_run{args.run_number}"
+
+    # Add morph details if morphology enabled
+    if args.morphology:
+        run_dir += f"_{args.operation}_k{args.kernel_size}"
+        if args.smart_morphology:
+            run_dir += f"_layers{args.morph_layers.replace(',', '-')}"
+
+    return f"{group_dir}/{run_dir}"
+
+
+def get_results_dir(args):
+    """
+    Get the results directory path based on experiment configuration.
+    Uses the new flat structure: results/{exp_name}/
+    """
+    exp_name = get_experiment_name(args)
+    return os.path.join("results", exp_name)
+
+
 def plot_examples(data_loader, model, device, num_examples=3):
     model.eval()  # Set the model to evaluation mode
     fig, axs = plt.subplots(num_examples, 3, figsize=(15, 5 * num_examples))
@@ -495,64 +552,51 @@ def segmentation_plots(
     kernel_size=3,
     smart_morphology=False,
     morph_layers="3,4,5",
+    args=None,
 ):
     """
-    Save segmentation plots organized by stage (validation or test).
+    Save segmentation plots with flat directory structure (RETFound-style).
+
+    Structure:
+        results/{model}-{dataset}-{exp_type}/{run_dir}/{stage}/plots/
 
     Args:
         data_loader: validation or test data loader
         stage: 'validation' or 'test'
-        operation: morphological operation (when morphology=True)
-        kernel_size: kernel size for morphological operation (when morphology=True)
-        smart_morphology: whether to apply morphology only to specific layers
-        morph_layers: comma-separated list of layer indices for smart morphology
+        args: argument namespace (if provided, uses get_results_dir for path)
     """
-    # Build directory structure matching results structure
-    results_dir = "results"
-    dataset_dir = os.path.join(results_dir, dataset)
-    if DPSGD:
-        dp_dir = os.path.join(dataset_dir, "dp")
-        if clipping_strategy == "flat":
-            clipping_dir = os.path.join(dp_dir, "base")
-        else:
-            clipping_dir = os.path.join(dp_dir, clipping_strategy)
-        epsilon_dir = os.path.join(
-            clipping_dir, f"epsilon_{int(epsilon) if epsilon else 8}"
-        )
-        if morphology:
-            if smart_morphology:
-                morph_dir = os.path.join(
-                    epsilon_dir,
-                    "smart_morph",
-                    operation,
-                    f"kernel_{kernel_size}",
-                    f"layers_{morph_layers.replace(',', '-')}",
-                )
-            else:
-                morph_dir = os.path.join(
-                    epsilon_dir, "with_morph", operation, f"kernel_{kernel_size}"
-                )
-        else:
-            morph_dir = os.path.join(epsilon_dir, "no_morph")
+    # Use new flat structure if args is provided
+    if args is not None:
+        exp_dir = get_results_dir(args)
+        plots_dir = os.path.join(exp_dir, stage, "plots")
     else:
-        non_dp_dir = os.path.join(dataset_dir, "non_dp")
-        if morphology:
-            if smart_morphology:
-                morph_dir = os.path.join(
-                    non_dp_dir,
-                    "smart_morph",
-                    operation,
-                    f"kernel_{kernel_size}",
-                    f"layers_{morph_layers.replace(',', '-')}",
-                )
-            else:
-                morph_dir = os.path.join(
-                    non_dp_dir, "with_morph", operation, f"kernel_{kernel_size}"
-                )
+        # Fallback: Build experiment name from individual parameters
+        model_short = model_name.lower()
+        dataset_lower = dataset.lower()
+
+        if DPSGD:
+            exp_type = f"dp_{clipping_strategy}"
+            if morphology:
+                exp_type += "_morph"
+        elif morphology:
+            exp_type = "base_morph"
         else:
-            morph_dir = os.path.join(non_dp_dir, "no_morph")
-    # Create stage-specific plots subdirectory with run-wise folders
-    plots_dir = os.path.join(morph_dir, stage, "plots", f"run{run_number}")
+            exp_type = "base"
+
+        group_dir = f"{model_short}-{dataset_lower}-{exp_type}"
+
+        if DPSGD:
+            run_dir = f"bs{batch_size}_eps{int(epsilon)}_run{run_number}"
+        else:
+            run_dir = f"bs{batch_size}_run{run_number}"
+
+        if morphology:
+            run_dir += f"_{operation}_k{kernel_size}"
+            if smart_morphology:
+                run_dir += f"_layers{morph_layers.replace(',', '-')}"
+
+        plots_dir = os.path.join("results", group_dir, run_dir, stage, "plots")
+
     os.makedirs(plots_dir, exist_ok=True)
     batch_processed = 0
     model.eval()
@@ -628,11 +672,10 @@ def segmentation_plots(
 
             plt.axis("off")
 
-            # Save plot to run-wise folder (removed run_number from filename since it's in folder name)
-            model_name_lower = model_name.lower()
+            # Save plot - simplified name since path contains all experiment info
             file_path = os.path.join(
                 plots_dir,
-                f"{model_name_lower}_batch{batch_size}_example_{batch_processed}.png",
+                f"example_{batch_processed}.png",
             )
             plt.savefig(file_path, format="png", bbox_inches="tight", dpi=150)
             plt.close()  # Close figure to free memory
@@ -696,76 +739,29 @@ def save_results_to_csv(
     clipping_strategy="none",
 ):
     """
-    Save results to CSV files organized by stage (validation or test).
+    Save results to CSV files with flat directory structure (RETFound-style).
+
+    Structure:
+        results/{model}-{dataset}-{exp_type}/{run_dir}/{stage}/results.csv
+        results/all_results_{stage}_global.csv
 
     Args:
         stage: 'validation' or 'test'
         loss_value: validation_loss or test_loss
         dice_score: validation_dice or test_dice
     """
-    # Build directory structure based on experimental strategy
-    results_dir = "results"
-    dataset_dir = os.path.join(results_dir, dataset)
-    if args.DPSGD:
-        dp_dir = os.path.join(dataset_dir, "dp")
-        if clipping_strategy == "flat":
-            clipping_dir = os.path.join(dp_dir, "base")
-        else:
-            clipping_dir = os.path.join(dp_dir, clipping_strategy)
-        epsilon_dir = os.path.join(
-            clipping_dir, f"epsilon_{int(privacy_epsilons) if privacy_epsilons else 8}"
-        )
-        if args.morphology:
-            if args.smart_morphology:
-                morph_dir = os.path.join(
-                    epsilon_dir,
-                    "smart_morph",
-                    args.operation,
-                    f"kernel_{args.kernel_size}",
-                    f"layers_{args.morph_layers.replace(',', '-')}",
-                )
-            else:
-                morph_dir = os.path.join(
-                    epsilon_dir,
-                    "with_morph",
-                    args.operation,
-                    f"kernel_{args.kernel_size}",
-                )
-        else:
-            morph_dir = os.path.join(epsilon_dir, "no_morph")
-    else:
-        non_dp_dir = os.path.join(dataset_dir, "non_dp")
-        if args.morphology:
-            if args.smart_morphology:
-                morph_dir = os.path.join(
-                    non_dp_dir,
-                    "smart_morph",
-                    args.operation,
-                    f"kernel_{args.kernel_size}",
-                    f"layers_{args.morph_layers.replace(',', '-')}",
-                )
-            else:
-                morph_dir = os.path.join(
-                    non_dp_dir,
-                    "with_morph",
-                    args.operation,
-                    f"kernel_{args.kernel_size}",
-                )
-        else:
-            morph_dir = os.path.join(non_dp_dir, "no_morph")
+    # Get experiment directory using new flat structure
+    exp_dir = get_results_dir(args)
 
     # Create stage-specific subdirectory
-    stage_dir = os.path.join(morph_dir, stage)
+    stage_dir = os.path.join(exp_dir, stage)
     os.makedirs(stage_dir, exist_ok=True)
 
-    # Create filename with batch size (run_number is a column, not in filename)
-    model_name_lower = model_name.lower()
-    file_name = os.path.join(
-        stage_dir, f"{model_name_lower}_batch{batch_size}_results.csv"
-    )
+    # Simple filename - just results.csv since path contains all info
+    file_name = os.path.join(stage_dir, "results.csv")
 
     # Global CSV file path (at results root) - separate for validation and test
-    global_csv_path = os.path.join(results_dir, f"all_results_{stage}_global.csv")
+    global_csv_path = os.path.join("results", f"all_results_{stage}_global.csv")
 
     # Prepare data to save in CSV - unified format
     row_data = [
@@ -967,6 +963,31 @@ def train(args):
     img_size = args.image_size
     batch_size = args.batch_size
     test = args.test
+
+    # Print experiment info at start
+    exp_name = get_experiment_name(args)
+    exp_dir = get_results_dir(args)
+    print(f"\n{'='*60}")
+    print(f"EXPERIMENT: {exp_name}")
+    print(f"{'='*60}")
+    print(f"  Output dir: {os.path.abspath(exp_dir)}")
+    print(f"  Model: {model_name}")
+    print(f"  Dataset: {args.dataset}")
+    print(f"  Batch size: {batch_size}")
+    print(f"  Learning rate: {learning_rate}")
+    print(f"  DPSGD: {args.DPSGD}")
+    if args.DPSGD:
+        print(f"    Epsilon: {args.epsilon}")
+        print(f"    Clipping: {args.clipping}")
+    print(f"  Morphology: {args.morphology}")
+    if args.morphology:
+        print(f"    Operation: {args.operation}")
+        print(f"    Kernel size: {args.kernel_size}")
+        print(f"    Smart morphology: {args.smart_morphology}")
+        if args.smart_morphology:
+            print(f"    Target layers: {args.morph_layers}")
+    print(f"  Run number: {args.run_number}")
+    print(f"{'='*60}\n")
 
     training_losses = []
     validation_losses = []
@@ -1392,6 +1413,7 @@ def train(args):
             if (args.morphology and args.smart_morphology)
             else "3,4,5"
         ),
+        args=args,  # Pass args for new flat directory structure
     )
     print("Test results and plots saved!")
     print(f" training loss:{training_losses}")
