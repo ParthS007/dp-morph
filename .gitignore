@@ -35,3 +35,4 @@ OCT_Segmentation/slurm_jobs/
 core.*
 *.err
 *.out
+AGENTS.md
