@@ -448,9 +448,9 @@ def segmentation_plots_test_morphology(
             _, predicted_masks = torch.max(preds, dim=1)
 
         indices = list(range(imgs.size(0)))
-        random.shuffle(indices)
+        # random.shuffle(indices)  # Disabled for reproducible visualization
 
-        for idx in indices:  # Use shuffled indices to select random images
+        for idx in indices:
             if batch_processed >= num_examples:
                 break
 
@@ -607,9 +607,9 @@ def segmentation_plots(
             _, predicted_masks = torch.max(preds, dim=1)
 
         indices = list(range(imgs.size(0)))
-        random.shuffle(indices)
+        # random.shuffle(indices)  # Disabled for reproducible visualization
 
-        for idx in indices:  # Use shuffled indices to select random images
+        for idx in indices:
             if batch_processed >= num_examples:
                 break
 
