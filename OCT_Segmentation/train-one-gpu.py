@@ -133,6 +133,12 @@ def argument_parser():
         type=int,
         help="Run number for this experiment (1, 2, or 3)",
     )
+    parser.add_argument(
+        "--results_base",
+        default="results",
+        type=str,
+        help="Base directory for results (default: results)",
+    )
 
     # Parse the arguments
     args = parser.parse_args()
@@ -357,10 +363,10 @@ def get_experiment_name(args):
 def get_results_dir(args):
     """
     Get the results directory path based on experiment configuration.
-    Uses the new flat structure: results/{exp_name}/
+    Uses the new flat structure: {results_base}/{exp_name}/
     """
     exp_name = get_experiment_name(args)
-    return os.path.join("results", exp_name)
+    return os.path.join(args.results_base, exp_name)
 
 
 def plot_examples(data_loader, model, device, num_examples=3):
