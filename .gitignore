@@ -10,6 +10,8 @@ __pycache__/
 
 # Logs
 *.log
+*.err
+*.out
 
 # OS filesxw
 .DS_Store
@@ -27,14 +29,7 @@ Thumbs.db
 
 # Ignore nested repo
 fast_differential_privacy/
-legacy_archive/
+archive/
 OCT_Segmentation/results/
 OCT_Segmentation/results_epsilon_sweep/
-OCT_Segmentation/pre-final-results/
-OCT_Segmentation/smart-base-results/
-OCT_Segmentation/slurm_jobs/
-core.*
-*.err
-*.out
 AGENTS.md
-results-0/

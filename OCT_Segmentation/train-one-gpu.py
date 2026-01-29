@@ -782,6 +782,7 @@ def save_results_to_csv(
         args.smart_morphology if args.morphology else False,
         args.morph_layers if (args.morphology and args.smart_morphology) else "none",
         learning_rate,
+        args.weight_decay,
         batch_size,
         args.run_number,
         iterations,
@@ -805,7 +806,7 @@ def save_results_to_csv(
         ),
         max_grad_norm,
         noise_multiplier,
-        stage,  # Add stage column
+        stage,
     ]
 
     # CSV header with stage column
@@ -821,6 +822,7 @@ def save_results_to_csv(
         "Smart_Morphology",
         "Morph_Layers",
         "Learning_Rate",
+        "Weight_Decay",
         "Batch_Size",
         "Run_Number",
         "Iterations",

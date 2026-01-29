@@ -16,7 +16,10 @@ import argparse
 from collections import defaultdict
 
 # Default results path (can be overridden via CLI)
-DEFAULT_RESULTS_PATH = os.path.join(os.path.dirname(__file__), "results")
+# Script is in slurm/, results are in parent directory
+DEFAULT_RESULTS_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)), "results"
+)
 
 # Architecture display name mapping
 ARCH_DISPLAY_NAMES = {
@@ -80,17 +83,19 @@ def calculate_metrics_umn(row):
     """Calculate UMN metrics from a row."""
     dice_all = parse_dice_all(row["Dice_All"])
     if dice_all is None or len(dice_all) < 2:
-        return None, None
+        return None, None, None
 
-    # Dice (2 Layers): indices 0-1 (background + RNFL)
-    dice_2 = np.mean(dice_all[0:2])
+    # Dice (RNFL Layer): index 1 (RNFL layer only)
+    dice_rnfl = dice_all[1] if len(dice_all) > 1 else None
+    # Dice (All Layers): indices 0-1 (background + RNFL)
+    dice_all_mean = np.mean(dice_all[0:2])
     mae = row["MAE"]
 
-    return dice_2, mae
+    return dice_rnfl, dice_all_mean, mae
 
 
 def collect_nonprivate_results(dataset):
-    """Collect non-private baseline and morph results."""
+    """Collect non-private baseline and morph results with traceability."""
     results = defaultdict(list)
 
     # Base directory patterns
@@ -110,7 +115,15 @@ def collect_nonprivate_results(dataset):
                     df = read_results_file(results_file)
                     if df is not None and len(df) > 0:
                         row = df.iloc[0]
-                        results[("baseline", None, None, bs)].append((run, row))
+                        trace_info = {
+                            "csv_file": results_file,
+                            "row_index": 2,  # +2 for header and 0-index
+                            "run": run,
+                            "bs": bs,
+                        }
+                        results[("baseline", None, None, bs)].append(
+                            (run, row, trace_info)
+                        )
 
     # Collect morph results
     morph_path = os.path.join(RESULTS_PATH, morph_dir)
@@ -128,13 +141,21 @@ def collect_nonprivate_results(dataset):
                     df = read_results_file(results_file)
                     if df is not None and len(df) > 0:
                         row = df.iloc[0]
-                        results[("morph", op, k, bs)].append((run, row))
+                        trace_info = {
+                            "csv_file": results_file,
+                            "row_index": 2,  # +2 for header and 0-index
+                            "run": run,
+                            "bs": bs,
+                            "op": op,
+                            "k": k,
+                        }
+                        results[("morph", op, k, bs)].append((run, row, trace_info))
 
     return results
 
 
 def collect_dp_results(dataset, strategy):
-    """Collect DP baseline and morph results for a given strategy."""
+    """Collect DP baseline and morph results for a given strategy with traceability."""
     results = defaultdict(list)
 
     # Base directory patterns
@@ -156,7 +177,16 @@ def collect_dp_results(dataset, strategy):
                     df = read_results_file(results_file)
                     if df is not None and len(df) > 0:
                         row = df.iloc[0]
-                        results[("baseline", None, None, bs, eps)].append((run, row))
+                        trace_info = {
+                            "csv_file": results_file,
+                            "row_index": 2,  # +2 for header and 0-index
+                            "run": run,
+                            "bs": bs,
+                            "eps": eps,
+                        }
+                        results[("baseline", None, None, bs, eps)].append(
+                            (run, row, trace_info)
+                        )
 
     # Collect morph results
     morph_path = os.path.join(RESULTS_PATH, morph_dir)
@@ -175,26 +205,46 @@ def collect_dp_results(dataset, strategy):
                     df = read_results_file(results_file)
                     if df is not None and len(df) > 0:
                         row = df.iloc[0]
-                        results[("morph", op, k, bs, eps)].append((run, row))
+                        trace_info = {
+                            "csv_file": results_file,
+                            "row_index": 2,  # +2 for header and 0-index
+                            "run": run,
+                            "bs": bs,
+                            "eps": eps,
+                            "op": op,
+                            "k": k,
+                        }
+                        results[("morph", op, k, bs, eps)].append(
+                            (run, row, trace_info)
+                        )
 
     return results
 
 
 def aggregate_metrics_duke(rows_list):
-    """Aggregate metrics over runs for Duke dataset."""
+    """Aggregate metrics over runs for Duke dataset with traceability."""
     dice_7_vals = []
     dice_all_vals = []
     mae_vals = []
+    trace_info_list = []
 
-    for run, row in rows_list:
+    for item in rows_list:
+        if len(item) == 3:
+            run, row, trace_info = item
+        else:
+            # Backward compatibility
+            run, row = item
+            trace_info = None
         d7, da, mae = calculate_metrics_duke(row)
         if d7 is not None:
             dice_7_vals.append(d7)
             dice_all_vals.append(da)
             mae_vals.append(mae)
+            if trace_info:
+                trace_info_list.append(trace_info)
 
     if len(dice_7_vals) == 0:
-        return None, None, None, None, None, None
+        return None, None, None, None, None, None, []
 
     return (
         np.mean(dice_7_vals),
@@ -203,28 +253,43 @@ def aggregate_metrics_duke(rows_list):
         np.std(dice_all_vals),
         np.mean(mae_vals),
         np.std(mae_vals),
+        trace_info_list,
     )
 
 
 def aggregate_metrics_umn(rows_list):
-    """Aggregate metrics over runs for UMN dataset."""
-    dice_2_vals = []
+    """Aggregate metrics over runs for UMN dataset with traceability."""
+    dice_rnfl_vals = []
+    dice_all_vals = []
     mae_vals = []
+    trace_info_list = []
 
-    for run, row in rows_list:
-        d2, mae = calculate_metrics_umn(row)
-        if d2 is not None:
-            dice_2_vals.append(d2)
+    for item in rows_list:
+        if len(item) == 3:
+            run, row, trace_info = item
+        else:
+            # Backward compatibility
+            run, row = item
+            trace_info = None
+        dr, da, mae = calculate_metrics_umn(row)
+        if dr is not None:
+            dice_rnfl_vals.append(dr)
+            dice_all_vals.append(da)
             mae_vals.append(mae)
+            if trace_info:
+                trace_info_list.append(trace_info)
 
-    if len(dice_2_vals) == 0:
-        return None, None, None, None
+    if len(dice_rnfl_vals) == 0:
+        return None, None, None, None, None, None, []
 
     return (
-        np.mean(dice_2_vals),
-        np.std(dice_2_vals),
+        np.mean(dice_rnfl_vals),
+        np.std(dice_rnfl_vals),
+        np.mean(dice_all_vals),
+        np.std(dice_all_vals),
         np.mean(mae_vals),
         np.std(mae_vals),
+        trace_info_list,
     )
 
 
@@ -245,6 +310,173 @@ def format_metric_bold(mean, std, is_best, precision=3):
     if is_best:
         return f"\\textbf{{{val_str}}}"
     return val_str
+
+
+def generate_nonprivate_combined_table(duke_results, umn_results):
+    """Generate combined non-private table with Duke and UMN side-by-side."""
+    configs = [
+        ("Baseline", "baseline", None, None),
+        ("Morph-Open $k$=3", "morph", "open", 3),
+        ("Morph-Open $k$=5", "morph", "open", 5),
+        ("Morph-Close $k$=3", "morph", "close", 3),
+        ("Morph-Close $k$=5", "morph", "close", 5),
+        ("Morph-Both $k$=3", "morph", "both", 3),
+        ("Morph-Both $k$=5", "morph", "both", 5),
+    ]
+
+    # Collect all metrics
+    all_metrics = []
+
+    for config_name, config_type, op, k in configs:
+        for bs in [8, 16]:
+            # Duke metrics
+            if config_type == "baseline":
+                duke_key = ("baseline", None, None, bs)
+            else:
+                duke_key = ("morph", op, k, bs)
+
+            if duke_key in duke_results and len(duke_results[duke_key]) > 0:
+                d7_mean, d7_std, da_mean, da_std, mae_mean, mae_std, duke_trace = (
+                    aggregate_metrics_duke(duke_results[duke_key])
+                )
+            else:
+                d7_mean = d7_std = da_mean = da_std = mae_mean = mae_std = None
+                duke_trace = []
+
+            # UMN metrics
+            if config_type == "baseline":
+                umn_key = ("baseline", None, None, bs)
+            else:
+                umn_key = ("morph", op, k, bs)
+
+            if umn_key in umn_results and len(umn_results[umn_key]) > 0:
+                (
+                    dr_mean,
+                    dr_std,
+                    da_umn_mean,
+                    da_umn_std,
+                    mae_umn_mean,
+                    mae_umn_std,
+                    umn_trace,
+                ) = aggregate_metrics_umn(umn_results[umn_key])
+            else:
+                dr_mean = dr_std = da_umn_mean = da_umn_std = mae_umn_mean = (
+                    mae_umn_std
+                ) = None
+                umn_trace = []
+
+            all_metrics.append(
+                {
+                    "config": config_name,
+                    "bs": bs,
+                    "duke_d7_mean": d7_mean,
+                    "duke_d7_std": d7_std,
+                    "duke_da_mean": da_mean,
+                    "duke_da_std": da_std,
+                    "duke_mae_mean": mae_mean,
+                    "duke_mae_std": mae_std,
+                    "umn_dr_mean": dr_mean,
+                    "umn_dr_std": dr_std,
+                    "umn_da_mean": da_umn_mean,
+                    "umn_da_std": da_umn_std,
+                    "umn_mae_mean": mae_umn_mean,
+                    "umn_mae_std": mae_umn_std,
+                    "duke_trace": duke_trace,
+                    "umn_trace": umn_trace,
+                }
+            )
+
+    # Find best values
+    duke_d7_vals = [
+        m["duke_d7_mean"] for m in all_metrics if m["duke_d7_mean"] is not None
+    ]
+    duke_da_vals = [
+        m["duke_da_mean"] for m in all_metrics if m["duke_da_mean"] is not None
+    ]
+    duke_mae_vals = [
+        m["duke_mae_mean"] for m in all_metrics if m["duke_mae_mean"] is not None
+    ]
+    umn_dr_vals = [
+        m["umn_dr_mean"] for m in all_metrics if m["umn_dr_mean"] is not None
+    ]
+    umn_da_vals = [
+        m["umn_da_mean"] for m in all_metrics if m["umn_da_mean"] is not None
+    ]
+    umn_mae_vals = [
+        m["umn_mae_mean"] for m in all_metrics if m["umn_mae_mean"] is not None
+    ]
+
+    best_duke_d7 = max(duke_d7_vals) if duke_d7_vals else None
+    best_duke_da = max(duke_da_vals) if duke_da_vals else None
+    best_duke_mae = min(duke_mae_vals) if duke_mae_vals else None
+    best_umn_dr = max(umn_dr_vals) if umn_dr_vals else None
+    best_umn_da = max(umn_da_vals) if umn_da_vals else None
+    best_umn_mae = min(umn_mae_vals) if umn_mae_vals else None
+
+    # Generate table rows
+    latex_rows = []
+    prev_config = None
+
+    for m in all_metrics:
+        if prev_config is not None and prev_config != m["config"].split()[0]:
+            latex_rows.append("\\midrule")
+        prev_config = m["config"].split()[0]
+
+        # Duke columns
+        d7_str = format_metric_bold(
+            m["duke_d7_mean"], m["duke_d7_std"], m["duke_d7_mean"] == best_duke_d7
+        )
+        da_duke_str = format_metric_bold(
+            m["duke_da_mean"], m["duke_da_std"], m["duke_da_mean"] == best_duke_da
+        )
+        mae_duke_str = format_metric_bold(
+            m["duke_mae_mean"], m["duke_mae_std"], m["duke_mae_mean"] == best_duke_mae
+        )
+
+        # UMN columns
+        dr_str = format_metric_bold(
+            m["umn_dr_mean"], m["umn_dr_std"], m["umn_dr_mean"] == best_umn_dr
+        )
+        da_umn_str = format_metric_bold(
+            m["umn_da_mean"], m["umn_da_std"], m["umn_da_mean"] == best_umn_da
+        )
+        mae_umn_str = format_metric_bold(
+            m["umn_mae_mean"],
+            m["umn_mae_std"],
+            m["umn_mae_mean"] == best_umn_mae,
+            precision=4,
+        )
+
+        latex_rows.append(
+            f"{m['config']} & {m['bs']} & {d7_str} & {da_duke_str} & {mae_duke_str} & {dr_str} & {da_umn_str} & {mae_umn_str} \\\\"
+        )
+
+    # Build combined table
+    table = f"""\\begin{{table}}[htbp]
+\\centering
+\\caption{{{ARCH_DISPLAY} non-private baseline results on Duke and UMN datasets. 
+$\\uparrow$ indicates higher is better, $\\downarrow$ indicates lower is better. 
+Duke: Dice (7 Layers) and Dice (All Layers). UMN: Dice (RNFL Layer) and Dice (All Layers).
+Morphology targets layers 3-5 (inner retinal layers) for Duke and all classes for UMN.
+Best values per metric are in \\textbf{{bold}}. 
+Results show mean $\\pm$ std over two independent runs.}}
+\\label{{tab:{ARCH}-nonprivate-combined}}
+\\resizebox{{\\textwidth}}{{!}}{{%
+\\begin{{tabular}}{{ll|ccc|ccc}}
+\\toprule
+\\multirow{{2}}{{*}}{{Configuration}} & \\multirow{{2}}{{*}}{{Batch Size}} & 
+\\multicolumn{{3}}{{c}}{{Duke}} & \\multicolumn{{3}}{{c}}{{UMN}} \\\\
+\\cmidrule(lr){{3-5}} \\cmidrule(lr){{6-8}}
+& & Dice (7) $\\uparrow$ & Dice (All) $\\uparrow$ & MAE $\\downarrow$ & 
+Dice (RNFL) $\\uparrow$ & Dice (All) $\\uparrow$ & MAE $\\downarrow$ \\\\
+\\midrule
+{chr(10).join(latex_rows)}
+\\bottomrule
+\\end{{tabular}}%
+}}
+\\end{{table}}"""
+
+    return table, all_metrics
 
 
 def generate_nonprivate_duke_table(results):
@@ -444,6 +676,149 @@ Configuration & Batch Size & Dice (2 Layers) $\\uparrow$ & MAE $\\downarrow$ \\\
     return table, all_metrics
 
 
+def generate_dp_combined_table(duke_strategy_results, umn_strategy_results):
+    """Generate combined DP table with Duke and UMN side-by-side."""
+    configs = [
+        ("Standard No Morph", "baseline", None, None),
+        ("Morph-Open $k$=3", "morph", "open", 3),
+        ("Morph-Open $k$=5", "morph", "open", 5),
+        ("Morph-Close $k$=3", "morph", "close", 3),
+        ("Morph-Close $k$=5", "morph", "close", 5),
+        ("Morph-Both $k$=3", "morph", "both", 3),
+        ("Morph-Both $k$=5", "morph", "both", 5),
+    ]
+
+    latex_rows = []
+
+    for strat_idx, strategy in enumerate(STRATEGY_ORDER):
+        duke_results = duke_strategy_results.get(strategy, {})
+        umn_results = umn_strategy_results.get(strategy, {})
+        strategy_metrics = []
+
+        for config_name, config_type, op, k in configs:
+            row_data = {"config": config_name}
+
+            for eps in [8, 200]:
+                for bs in [8, 16]:
+                    if config_type == "baseline":
+                        duke_key = ("baseline", None, None, bs, eps)
+                        umn_key = ("baseline", None, None, bs, eps)
+                    else:
+                        duke_key = ("morph", op, k, bs, eps)
+                        umn_key = ("morph", op, k, bs, eps)
+
+                    # Duke metrics
+                    if duke_key in duke_results and len(duke_results[duke_key]) > 0:
+                        d7_mean, d7_std, _, _, _, _, _ = aggregate_metrics_duke(
+                            duke_results[duke_key]
+                        )
+                        row_data[f"duke_eps{eps}_bs{bs}_mean"] = d7_mean
+                        row_data[f"duke_eps{eps}_bs{bs}_std"] = d7_std
+                    else:
+                        row_data[f"duke_eps{eps}_bs{bs}_mean"] = None
+                        row_data[f"duke_eps{eps}_bs{bs}_std"] = None
+
+                    # UMN metrics
+                    if umn_key in umn_results and len(umn_results[umn_key]) > 0:
+                        dr_mean, dr_std, _, _, _, _, _ = aggregate_metrics_umn(
+                            umn_results[umn_key]
+                        )
+                        row_data[f"umn_eps{eps}_bs{bs}_mean"] = dr_mean
+                        row_data[f"umn_eps{eps}_bs{bs}_std"] = dr_std
+                    else:
+                        row_data[f"umn_eps{eps}_bs{bs}_mean"] = None
+                        row_data[f"umn_eps{eps}_bs{bs}_std"] = None
+
+            strategy_metrics.append(row_data)
+
+        # Find best per column for this strategy
+        best_vals = {}
+        for col in [
+            "duke_eps8_bs8",
+            "duke_eps8_bs16",
+            "duke_eps200_bs8",
+            "duke_eps200_bs16",
+            "umn_eps8_bs8",
+            "umn_eps8_bs16",
+            "umn_eps200_bs8",
+            "umn_eps200_bs16",
+        ]:
+            vals = [
+                m[f"{col}_mean"]
+                for m in strategy_metrics
+                if m[f"{col}_mean"] is not None
+            ]
+            best_vals[col] = max(vals) if vals else None
+
+        # Generate rows for this strategy
+        for i, m in enumerate(strategy_metrics):
+            if i == 0:
+                strat_cell = f"\\multirow{{7}}{{*}}{{{STRATEGY_DISPLAY[strategy]}}}"
+            else:
+                strat_cell = ""
+
+            cols = []
+            # Duke columns
+            for col in [
+                "duke_eps8_bs8",
+                "duke_eps8_bs16",
+                "duke_eps200_bs8",
+                "duke_eps200_bs16",
+            ]:
+                is_best = (
+                    m[f"{col}_mean"] == best_vals[col] and best_vals[col] is not None
+                )
+                cols.append(
+                    format_metric_bold(m[f"{col}_mean"], m[f"{col}_std"], is_best)
+                )
+            # UMN columns
+            for col in [
+                "umn_eps8_bs8",
+                "umn_eps8_bs16",
+                "umn_eps200_bs8",
+                "umn_eps200_bs16",
+            ]:
+                is_best = (
+                    m[f"{col}_mean"] == best_vals[col] and best_vals[col] is not None
+                )
+                cols.append(
+                    format_metric_bold(m[f"{col}_mean"], m[f"{col}_std"], is_best)
+                )
+
+            latex_rows.append(f"{strat_cell} & {m['config']} & {' & '.join(cols)} \\\\")
+
+        if strat_idx < len(STRATEGY_ORDER) - 1:
+            latex_rows.append("\\midrule")
+
+    table = f"""\\begin{{table}}[htbp]
+\\centering
+\\caption{{{ARCH_DISPLAY} DP results on Duke and UMN datasets comparing $\\varepsilon = 8$ (strong privacy) 
+and $\\varepsilon = 200$ (weak privacy). $\\uparrow$ indicates higher is better. 
+Duke: Dice (7 Layers). UMN: Dice (RNFL Layer).
+Morphology targets layers 3-5 (inner retinal layers) for Duke and all classes for UMN.
+Best values per clipping strategy and privacy level are in \\textbf{{bold}}. 
+Results show mean $\\pm$ std over two independent runs.}}
+\\label{{tab:{ARCH}-dp-combined}}
+\\resizebox{{\\textwidth}}{{!}}{{%
+\\begin{{tabular}}{{ll|cccc|cccc}}
+\\toprule
+\\multirow{{2}}{{*}}{{Clipping Strategy}} & \\multirow{{2}}{{*}}{{Configuration}} & 
+\\multicolumn{{4}}{{c}}{{Duke}} & \\multicolumn{{4}}{{c}}{{UMN}} \\\\
+\\cmidrule(lr){{3-6}} \\cmidrule(lr){{7-10}}
+& & $\\varepsilon$=8 (BS=8) $\\uparrow$ & $\\varepsilon$=8 (BS=16) $\\uparrow$ & 
+$\\varepsilon$=200 (BS=8) $\\uparrow$ & $\\varepsilon$=200 (BS=16) $\\uparrow$ & 
+$\\varepsilon$=8 (BS=8) $\\uparrow$ & $\\varepsilon$=8 (BS=16) $\\uparrow$ & 
+$\\varepsilon$=200 (BS=8) $\\uparrow$ & $\\varepsilon$=200 (BS=16) $\\uparrow$ \\\\
+\\midrule
+{chr(10).join(latex_rows)}
+\\bottomrule
+\\end{{tabular}}%
+}}
+\\end{{table}}"""
+
+    return table
+
+
 def generate_dp_duke_table(all_strategy_results):
     """Generate Table 3: DP Duke (Combined epsilon)."""
     configs = [
@@ -628,69 +1003,111 @@ Clipping Strategy & Configuration & $\\varepsilon$=8 (BS=8) $\\uparrow$ & $\\var
     return table, all_strategy_results
 
 
-def generate_nonprivate_findings(duke_metrics, umn_metrics):
-    """Generate key findings paragraph for non-private results."""
-    # Extract best configurations
-    duke_best_d7 = max(
-        [m for m in duke_metrics if m["d7_mean"] is not None],
-        key=lambda x: x["d7_mean"],
-    )
-    duke_worst_d7 = min(
-        [m for m in duke_metrics if m["d7_mean"] is not None],
-        key=lambda x: x["d7_mean"],
-    )
+def generate_traceability_report(combined_metrics):
+    """Generate traceability report showing CSV file paths and row numbers."""
+    report_lines = []
+    report_lines.append("\\section*{Traceability Report}")
 
-    umn_best_d2 = max(
-        [m for m in umn_metrics if m["d2_mean"] is not None], key=lambda x: x["d2_mean"]
-    )
-    umn_worst_d2 = min(
-        [m for m in umn_metrics if m["d2_mean"] is not None], key=lambda x: x["d2_mean"]
-    )
+    # Non-private results
+    report_lines.append("\\subsection*{Non-Private Results}")
+    report_lines.append("\\subsubsection*{Duke Dataset}")
+
+    for m in combined_metrics:
+        if m.get("duke_trace"):
+            config = m["config"]
+            bs = m["bs"]
+            report_lines.append(f"\\paragraph{{{config}, BS={bs}}}")
+            for trace in m["duke_trace"]:
+                csv_file = trace["csv_file"].replace("_", "\\_")
+                row_idx = trace["row_index"]
+                report_lines.append(f"CSV: {csv_file}, Row: {row_idx}")
+
+    report_lines.append("\\subsubsection*{UMN Dataset}")
+
+    for m in combined_metrics:
+        if m.get("umn_trace"):
+            config = m["config"]
+            bs = m["bs"]
+            report_lines.append(f"\\paragraph{{{config}, BS={bs}}}")
+            for trace in m["umn_trace"]:
+                csv_file = trace["csv_file"].replace("_", "\\_")
+                row_idx = trace["row_index"]
+                report_lines.append(f"CSV: {csv_file}, Row: {row_idx}")
+
+    return "\n".join(report_lines)
+
+
+def generate_nonprivate_findings(combined_metrics):
+    """Generate key findings paragraph for non-private results."""
+    # Extract best configurations (only if data exists)
+    duke_valid = [m for m in combined_metrics if m.get("duke_d7_mean") is not None]
+    umn_valid = [m for m in combined_metrics if m.get("umn_dr_mean") is not None]
 
     # Get baseline performance
-    duke_baseline = [m for m in duke_metrics if m["config"] == "Baseline"]
-    umn_baseline = [m for m in umn_metrics if m["config"] == "Baseline"]
+    duke_baseline = [m for m in combined_metrics if m["config"] == "Baseline"]
+    umn_baseline = [m for m in combined_metrics if m["config"] == "Baseline"]
 
     findings = f"""\\paragraph{{Key Findings.}}
-Tables~\\ref{{tab:{ARCH}-duke-nonprivate}} and~\\ref{{tab:{ARCH}-umn-nonprivate}} present the non-private baseline results for {ARCH_DISPLAY} on Duke and UMN datasets respectively.
+Table~\\ref{{tab:{ARCH}-nonprivate-combined}} presents the non-private baseline results for {ARCH_DISPLAY} on Duke and UMN datasets.
+"""
 
-On the Duke dataset, the best Dice (7 Layers) score of {duke_best_d7['d7_mean']:.3f} is achieved by {duke_best_d7['config']} with BS={duke_best_d7['bs']}, while the lowest performance ({duke_worst_d7['d7_mean']:.3f}) is observed with {duke_worst_d7['config']} (BS={duke_worst_d7['bs']}). """
+    if duke_valid:
+        duke_best_d7 = max(duke_valid, key=lambda x: x["duke_d7_mean"])
+        duke_worst_d7 = min(duke_valid, key=lambda x: x["duke_d7_mean"])
+        findings += f"""
+On the Duke dataset, the best Dice (7 Layers) score of {duke_best_d7['duke_d7_mean']:.3f} is achieved by {duke_best_d7['config']} with BS={duke_best_d7['bs']}, while the lowest performance ({duke_worst_d7['duke_d7_mean']:.3f}) is observed with {duke_worst_d7['config']} (BS={duke_worst_d7['bs']}). """
 
-    # Analyze morphology effects
-    morph_configs = [m for m in duke_metrics if "Morph" in m["config"]]
-    open_configs = [m for m in morph_configs if "Open" in m["config"]]
-    close_configs = [m for m in morph_configs if "Close" in m["config"]]
-    both_configs = [m for m in morph_configs if "Both" in m["config"]]
+    # Analyze morphology effects (only if Duke data exists)
+    if duke_valid:
+        morph_configs = [m for m in combined_metrics if "Morph" in m["config"]]
+        open_configs = [m for m in morph_configs if "Open" in m["config"]]
+        close_configs = [m for m in morph_configs if "Close" in m["config"]]
+        both_configs = [m for m in morph_configs if "Both" in m["config"]]
 
-    if open_configs and close_configs:
-        avg_open = np.mean(
-            [m["d7_mean"] for m in open_configs if m["d7_mean"] is not None]
-        )
-        avg_close = np.mean(
-            [m["d7_mean"] for m in close_configs if m["d7_mean"] is not None]
-        )
-        avg_both = np.mean(
-            [m["d7_mean"] for m in both_configs if m["d7_mean"] is not None]
-        )
-        avg_baseline = np.mean(
-            [m["d7_mean"] for m in duke_baseline if m["d7_mean"] is not None]
-        )
+        open_vals = [
+            m["duke_d7_mean"] for m in open_configs if m.get("duke_d7_mean") is not None
+        ]
+        close_vals = [
+            m["duke_d7_mean"]
+            for m in close_configs
+            if m.get("duke_d7_mean") is not None
+        ]
+        both_vals = [
+            m["duke_d7_mean"] for m in both_configs if m.get("duke_d7_mean") is not None
+        ]
+        baseline_vals = [
+            m["duke_d7_mean"]
+            for m in duke_baseline
+            if m.get("duke_d7_mean") is not None
+        ]
 
-        findings += f"Comparing morphological operations, the opening operation (avg Dice: {avg_open:.3f}) and both operations (avg Dice: {avg_both:.3f}) perform comparably, while the closing operation (avg Dice: {avg_close:.3f}) shows {'improved' if avg_close > avg_baseline else 'reduced'} performance relative to baseline (avg: {avg_baseline:.3f}). "
+        if open_vals and close_vals and baseline_vals:
+            avg_open = np.mean(open_vals)
+            avg_close = np.mean(close_vals)
+            avg_both = np.mean(both_vals) if both_vals else 0
+            avg_baseline = np.mean(baseline_vals)
 
-    findings += f"""
+            findings += f"Comparing morphological operations, the opening operation (avg Dice: {avg_open:.3f}) and both operations (avg Dice: {avg_both:.3f}) perform comparably, while the closing operation (avg Dice: {avg_close:.3f}) shows {'improved' if avg_close > avg_baseline else 'reduced'} performance relative to baseline (avg: {avg_baseline:.3f}). "
 
-On the UMN dataset, {umn_best_d2['config']} with BS={umn_best_d2['bs']} achieves the highest Dice (2 Layers) score of {umn_best_d2['d2_mean']:.3f}. """
+    # UMN findings (only if UMN data exists)
+    if umn_valid:
+        umn_best_dr = max(umn_valid, key=lambda x: x["umn_dr_mean"])
+        findings += f"""
 
-    umn_avg_baseline = np.mean(
-        [m["d2_mean"] for m in umn_baseline if m["d2_mean"] is not None]
-    )
-    umn_morph = [m for m in umn_metrics if "Morph" in m["config"]]
-    umn_avg_morph = np.mean(
-        [m["d2_mean"] for m in umn_morph if m["d2_mean"] is not None]
-    )
+On the UMN dataset, {umn_best_dr['config']} with BS={umn_best_dr['bs']} achieves the highest Dice (RNFL Layer) score of {umn_best_dr['umn_dr_mean']:.3f}. """
 
-    findings += f"The baseline achieves an average Dice of {umn_avg_baseline:.3f}, while morphological regularization yields an average of {umn_avg_morph:.3f}, indicating {'a slight improvement' if umn_avg_morph > umn_avg_baseline else 'comparable performance'}."
+        umn_avg_baseline_vals = [
+            m["umn_dr_mean"] for m in umn_baseline if m.get("umn_dr_mean") is not None
+        ]
+        umn_morph = [m for m in combined_metrics if "Morph" in m["config"]]
+        umn_avg_morph_vals = [
+            m["umn_dr_mean"] for m in umn_morph if m.get("umn_dr_mean") is not None
+        ]
+
+        if umn_avg_baseline_vals and umn_avg_morph_vals:
+            umn_avg_baseline = np.mean(umn_avg_baseline_vals)
+            umn_avg_morph = np.mean(umn_avg_morph_vals)
+            findings += f"The baseline achieves an average Dice of {umn_avg_baseline:.3f}, while morphological regularization yields an average of {umn_avg_morph:.3f}, indicating {'a slight improvement' if umn_avg_morph > umn_avg_baseline else 'comparable performance'}."
 
     return findings
 
@@ -698,7 +1115,7 @@ On the UMN dataset, {umn_best_d2['config']} with BS={umn_best_d2['bs']} achieves
 def generate_dp_findings(duke_results, umn_results):
     """Generate key findings paragraph for DP results."""
     findings = f"""\\paragraph{{Key Findings.}}
-Tables~\\ref{{tab:{ARCH}-duke-dp}} and~\\ref{{tab:{ARCH}-umn-dp}} present the differentially private results for {ARCH_DISPLAY} under strong ($\\varepsilon = 8$) and weak ($\\varepsilon = 200$) privacy guarantees.
+Table~\\ref{{tab:{ARCH}-dp-combined}} presents the differentially private results for {ARCH_DISPLAY} under strong ($\\varepsilon = 8$) and weak ($\\varepsilon = 200$) privacy guarantees.
 
 Under strong privacy ($\\varepsilon = 8$), performance is substantially reduced compared to non-private baselines, as expected with strict privacy constraints. """
 
@@ -713,11 +1130,11 @@ Under strong privacy ($\\varepsilon = 8$), performance is substantially reduced 
 
         for key, rows in results.items():
             if key[4] == 8:  # eps = 8
-                d7, _, _, _, _, _ = aggregate_metrics_duke(rows)
+                d7, _, _, _, _, _, _ = aggregate_metrics_duke(rows)
                 if d7 is not None:
                     eps8_vals.append(d7)
             elif key[4] == 200:  # eps = 200
-                d7, _, _, _, _, _ = aggregate_metrics_duke(rows)
+                d7, _, _, _, _, _, _ = aggregate_metrics_duke(rows)
                 if d7 is not None:
                     eps200_vals.append(d7)
 
@@ -758,13 +1175,13 @@ Comparing privacy levels, relaxing privacy from $\\varepsilon = 8$ to $\\varepsi
 
         for key, rows in results.items():
             if key[4] == 8:
-                d2, _, _, _ = aggregate_metrics_umn(rows)
-                if d2 is not None:
-                    eps8_vals.append(d2)
+                dr, _, _, _, _, _, _ = aggregate_metrics_umn(rows)
+                if dr is not None:
+                    eps8_vals.append(dr)
             elif key[4] == 200:
-                d2, _, _, _ = aggregate_metrics_umn(rows)
-                if d2 is not None:
-                    eps200_vals.append(d2)
+                dr, _, _, _, _, _, _ = aggregate_metrics_umn(rows)
+                if dr is not None:
+                    eps200_vals.append(dr)
 
         if eps8_vals:
             umn_eps8_by_strategy[strategy] = np.mean(eps8_vals)
@@ -786,7 +1203,6 @@ def parse_args():
         epilog="""
 Examples:
     python generate_tables.py --arch lfunet
-    python generate_tables.py --arch deeplabv3 --output deeplabv3_tables.tex
     python generate_tables.py --arch unet --results-path /custom/path/to/results
         """,
     )
@@ -816,6 +1232,12 @@ Examples:
         type=str,
         default=None,
         help="Output file for LaTeX tables (default: print to stdout)",
+    )
+    parser.add_argument(
+        "--traceability",
+        "-t",
+        action="store_true",
+        help="Include traceability report",
     )
     return parser.parse_args()
 
@@ -872,40 +1294,38 @@ def main():
 
     # Generate tables
     log("\n" + "=" * 80)
-    log("TABLE 1: Non-Private Duke")
+    log("TABLE 1: Non-Private Combined (Duke + UMN)")
     log("=" * 80)
-    table1, duke_metrics = generate_nonprivate_duke_table(duke_nonprivate)
+    table1, combined_metrics = generate_nonprivate_combined_table(
+        duke_nonprivate, umn_nonprivate
+    )
     log(table1)
-
-    log("\n" + "=" * 80)
-    log("TABLE 2: Non-Private UMN")
-    log("=" * 80)
-    table2, umn_metrics = generate_nonprivate_umn_table(umn_nonprivate)
-    log(table2)
 
     log("\n" + "=" * 80)
     log("KEY FINDINGS: Non-Private")
     log("=" * 80)
-    findings_nonprivate = generate_nonprivate_findings(duke_metrics, umn_metrics)
+    findings_nonprivate = generate_nonprivate_findings(combined_metrics)
     log(findings_nonprivate)
 
     log("\n" + "=" * 80)
-    log("TABLE 3: DP Duke")
+    log("TABLE 2: DP Combined (Duke + UMN)")
     log("=" * 80)
-    table3, _ = generate_dp_duke_table(duke_dp)
-    log(table3)
-
-    log("\n" + "=" * 80)
-    log("TABLE 4: DP UMN")
-    log("=" * 80)
-    table4, _ = generate_dp_umn_table(umn_dp)
-    log(table4)
+    table2 = generate_dp_combined_table(duke_dp, umn_dp)
+    log(table2)
 
     log("\n" + "=" * 80)
     log("KEY FINDINGS: DP")
     log("=" * 80)
     findings_dp = generate_dp_findings(duke_dp, umn_dp)
     log(findings_dp)
+
+    # Generate traceability report if requested
+    if args.traceability:
+        log("\n" + "=" * 80)
+        log("TRACEABILITY REPORT")
+        log("=" * 80)
+        trace_report = generate_traceability_report(combined_metrics)
+        log(trace_report)
 
     # Save to file if requested
     if args.output:
