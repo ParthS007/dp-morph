@@ -144,6 +144,29 @@ def generate_base_morph_commands(model, dataset):
     return commands
 
 
+def generate_base_morph_all_layers_commands(model, dataset):
+    """Generate base + morphology commands (no DP) - morphology applied to ALL layers."""
+    commands = []
+    for operation in MORPH_OPERATIONS:
+        for kernel_size in KERNEL_SIZES:
+            for bs in BATCH_SIZES:
+                for run in RUNS:
+                    cmd = (
+                        f"python train-one-gpu.py "
+                        f"--model_name {model} "
+                        f"--dataset {dataset} "
+                        f"--morphology True "
+                        f"--operation {operation} "
+                        f"--kernel_size {kernel_size} "
+                        f"--smart_morphology False "
+                        f"--DPSGD False "
+                        f"--batch_size {bs} "
+                        f"--run_number {run}"
+                    )
+                    commands.append(cmd)
+    return commands
+
+
 def generate_dp_commands(model, dataset, clipping):
     """Generate DP commands (no morph)."""
     commands = []
@@ -181,6 +204,33 @@ def generate_dp_morph_commands(model, dataset, clipping):
                             f"--operation {operation} "
                             f"--kernel_size {kernel_size} "
                             f"--smart_morphology False "
+                            f"--DPSGD True "
+                            f"--epsilon {epsilon} "
+                            f"--clipping {clipping} "
+                            f"--batch_size {bs} "
+                            f"--run_number {run}"
+                        )
+                        commands.append(cmd)
+    return commands
+
+
+def generate_dp_morph_smart_commands(model, dataset, clipping):
+    """Generate DP + morphology commands - uses SMART morphology (layers 3,4,5)."""
+    commands = []
+    for operation in MORPH_OPERATIONS:
+        for kernel_size in KERNEL_SIZES:
+            for epsilon in EPSILONS:
+                for bs in BATCH_SIZES:
+                    for run in RUNS:
+                        cmd = (
+                            f"python train-one-gpu.py "
+                            f"--model_name {model} "
+                            f"--dataset {dataset} "
+                            f"--morphology True "
+                            f"--operation {operation} "
+                            f"--kernel_size {kernel_size} "
+                            f"--smart_morphology True "
+                            f"--morph_layers 3,4,5 "
                             f"--DPSGD True "
                             f"--epsilon {epsilon} "
                             f"--clipping {clipping} "
@@ -274,6 +324,21 @@ def main():
             print(f"  {model_short} base_morph: {len(commands)} experiments")
 
             # ========================================
+            # 3. Base + Morphology ALL LAYERS (no DP) - new jobs only
+            # ========================================
+            job_name = f"{model_short}_{dataset_lower}_base_morph_all_layers"
+            log_dir = f"{model_short}-{dataset_lower}-base-morph-all-layers"
+            txt_file = f"{model_short}-{dataset_lower}-base-morph-all-layers.txt"
+            sh_file = f"{model_short}_{dataset_lower}_base_morph_all_layers.sh"
+
+            commands = generate_base_morph_all_layers_commands(model, dataset)
+            files_created += write_files(
+                job_name, log_dir, txt_file, sh_file, commands, args.dry_run
+            )
+            total_experiments += len(commands)
+            print(f"  {model_short} base_morph_all_layers: {len(commands)} experiments")
+
+            # ========================================
             # 4. DP experiments (all clipping strategies)
             # ========================================
             for clipping in CLIPPING_STRATEGIES:
@@ -311,6 +376,29 @@ def main():
                     f"  {model_short} dp_{clipping_short}_morph: {len(commands)} experiments"
                 )
 
+                # DP with morph (SMART - layers 3,4,5) - new jobs only
+                job_name = (
+                    f"{model_short}_{dataset_lower}_dp_{clipping_short}_morph_smart"
+                )
+                log_dir = (
+                    f"{model_short}-{dataset_lower}-dp-{clipping_short}-morph-smart"
+                )
+                txt_file = (
+                    f"{model_short}-{dataset_lower}-dp-{clipping_short}-morph-smart.txt"
+                )
+                sh_file = (
+                    f"{model_short}_{dataset_lower}_dp_{clipping_short}_morph_smart.sh"
+                )
+
+                commands = generate_dp_morph_smart_commands(model, dataset, clipping)
+                files_created += write_files(
+                    job_name, log_dir, txt_file, sh_file, commands, args.dry_run
+                )
+                total_experiments += len(commands)
+                print(
+                    f"  {model_short} dp_{clipping_short}_morph_smart: {len(commands)} experiments"
+                )
+
     print(f"\n{'='*60}")
     print(f"SUMMARY")
     print(f"{'='*60}")
@@ -336,13 +424,21 @@ def main():
     print(f"\nPer model per dataset:")
     print(f"  Ablation (LR×WD):  {ablation_per_model} (includes base case)")
     print(f"  Base + Morph:      {morph_per_model}")
+    print(f"  Base + Morph (all layers): {morph_per_model} (new jobs only)")
     print(f"  DP (per clipping): {dp_per_model}")
     print(f"  DP + Morph:        {dp_morph_per_model}")
+    print(f"  DP + Morph (smart): {dp_morph_per_model} (new jobs only)")
 
     if not args.dry_run:
         print(f"\nFiles written to: {SLURM_DIR}")
         print("\nTo submit all experiments for a dataset:")
         print("  for f in *_duke_*.sh; do sbatch $f; done")
+        print(
+            "\nTo submit ONLY the new morphology experiments (all-layers base, smart DP):"
+        )
+        print(
+            "  for f in *_base_morph_all_layers.sh *_dp_*_morph_smart.sh; do sbatch $f; done"
+        )
 
 
 if __name__ == "__main__":
