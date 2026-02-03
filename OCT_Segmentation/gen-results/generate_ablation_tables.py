@@ -16,9 +16,10 @@ import argparse
 from collections import defaultdict
 from pathlib import Path
 
-# Default paths
-DEFAULT_RESULTS_PATH = os.path.join(os.path.dirname(__file__), "..", "results")
-DEFAULT_SLURM_DIR = os.path.dirname(__file__)
+# Default paths (ablation .txt files live in slurm/, script in gen-results/)
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_RESULTS_PATH = os.path.join(_script_dir, "..", "results")
+DEFAULT_SLURM_DIR = os.path.join(_script_dir, "..", "slurm")
 
 # Architecture display name mapping
 ARCH_DISPLAY_NAMES = {
