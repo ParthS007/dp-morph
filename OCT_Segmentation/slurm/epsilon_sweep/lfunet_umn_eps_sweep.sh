@@ -6,9 +6,9 @@
 #SBATCH --mem=64G
 #SBATCH --cpus-per-task=2
 #SBATCH --gres=gpu:1
-#SBATCH --partition=a100-80g
+#SBATCH --partition=a100
 #SBATCH --qos=gpu6hours
-#SBATCH --array=1-9%16
+#SBATCH --array=1-12%16
 
 # Create logs directory if it doesn't exist
 mkdir -p /scicore/home/wagner0024/shandi0000/2025-msc-parth-shandilya/code/dp-morph/OCT_Segmentation/slurm/epsilon_sweep/logs/lfunet-umn-eps-sweep

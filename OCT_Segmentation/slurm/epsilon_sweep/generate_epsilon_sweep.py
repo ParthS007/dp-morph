@@ -3,15 +3,15 @@
 Generate SLURM experiment scripts for epsilon sweep experiments.
 
 This script generates experiments to study how Dice score varies with epsilon
-(privacy budget) from 20 to 180 in increments of 20.
+(privacy budget) from 8 to 200.
 
 Configuration:
 - Clipping Strategy: automatic (AUTO-S)
-- Batch Size: 16 only
+- Batch Size: 8
 - Runs: 1 only
-- Morphology: False (Standard No Morph)
-- Epsilons: 20, 40, 60, 80, 100, 120, 140, 160, 180 (skip 8 and 200 - already exist)
-- Results Base: results_epsilon_sweep (separate from existing results)
+- Morphology: model-dependent (U-Net/LFU-Net: smart morph both k=3; NestedUNet: normal morph close k=3)
+- Epsilons: 8, 10, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200
+- Results Base: results_epsilon_sweep
 
 Usage:
     python generate_epsilon_sweep.py           # Generate all experiments
@@ -33,13 +33,13 @@ MODEL_NAMES = {"unet": "unet", "NestedUNet": "nestedunet", "LFUNet": "lfunet"}
 DATASETS = ["Duke", "UMN"]
 
 # Fixed parameters for epsilon sweep
-BATCH_SIZE = 16
+BATCH_SIZE = 8
 RUN_NUMBER = 1
 CLIPPING_STRATEGY = "automatic"
 RESULTS_BASE = "results_epsilon_sweep"
 
-# Epsilon values to test (skip 8 and 200 as they already exist in results/)
-EPSILONS = [20, 40, 60, 80, 100, 120, 140, 160, 180]
+# Epsilon values to test (8 to 200)
+EPSILONS = [8, 10, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200]
 
 
 def generate_sh_script(job_name, log_dir, array_size, txt_file, time="06:00:00"):
@@ -52,7 +52,7 @@ def generate_sh_script(job_name, log_dir, array_size, txt_file, time="06:00:00")
 #SBATCH --mem=64G
 #SBATCH --cpus-per-task=2
 #SBATCH --gres=gpu:1
-#SBATCH --partition=a100-80g
+#SBATCH --partition=a100
 #SBATCH --qos=gpu6hours
 #SBATCH --array=1-{array_size}%16
 
@@ -87,8 +87,48 @@ echo "Task $SLURM_ARRAY_TASK_ID completed at $(date)"
 """
 
 
+def get_morphology_args(model):
+    """Return morphology flags for the given model."""
+    if model == "NestedUNet":
+        return (
+            "--morphology True "
+            "--operation close "
+            "--kernel_size 3 "
+            "--smart_morphology False "
+        )
+    # U-Net and LFUNet: smart morphology, both operation, k=3
+    return (
+        "--morphology True "
+        "--operation both "
+        "--kernel_size 3 "
+        "--smart_morphology True "
+        "--morph_layers 3,4,5 "
+    )
+
+
 def generate_epsilon_sweep_commands(model, dataset):
-    """Generate epsilon sweep commands for a given model and dataset."""
+    """Generate epsilon sweep commands for a given model and dataset (with morphology)."""
+    morph_args = get_morphology_args(model)
+    commands = []
+    for epsilon in EPSILONS:
+        cmd = (
+            f"python train-one-gpu.py "
+            f"--model_name {model} "
+            f"--dataset {dataset} "
+            f"{morph_args}"
+            f"--DPSGD True "
+            f"--epsilon {epsilon} "
+            f"--clipping {CLIPPING_STRATEGY} "
+            f"--batch_size {BATCH_SIZE} "
+            f"--run_number {RUN_NUMBER} "
+            f"--results_base {RESULTS_BASE}"
+        )
+        commands.append(cmd)
+    return commands
+
+
+def generate_epsilon_sweep_commands_no_morph(model, dataset):
+    """Generate epsilon sweep commands for DP without morphology (same epsilons, batch size 8)."""
     commands = []
     for epsilon in EPSILONS:
         cmd = (
@@ -159,6 +199,8 @@ def main():
     print(f"  Models: {list(MODEL_NAMES.values())}")
     print(f"  Datasets: {DATASETS}")
 
+    # --- DP with morphology (existing) ---
+    print("\n--- DP with morphology ---")
     for model in MODELS:
         model_short = MODEL_NAMES[model]
 
@@ -170,9 +212,30 @@ def main():
             txt_file = f"{model_short}-{dataset_lower}-eps-sweep.txt"
             sh_file = f"{model_short}_{dataset_lower}_eps_sweep.sh"
 
-            print(f"\n{model_short} - {dataset}:")
+            print(f"\n{model_short} - {dataset} (morph):")
 
             commands = generate_epsilon_sweep_commands(model, dataset)
+            files_created += write_files(
+                job_name, log_dir, txt_file, sh_file, commands, args.dry_run
+            )
+            total_experiments += len(commands)
+
+    # --- DP without morphology (same epsilons, batch size 8) ---
+    print("\n--- DP without morphology ---")
+    for model in MODELS:
+        model_short = MODEL_NAMES[model]
+
+        for dataset in DATASETS:
+            dataset_lower = dataset.lower()
+
+            job_name = f"{model_short}_{dataset_lower}_eps_sweep_no_morph"
+            log_dir = f"{model_short}-{dataset_lower}-eps-sweep-no-morph"
+            txt_file = f"{model_short}-{dataset_lower}-eps-sweep-no-morph.txt"
+            sh_file = f"{model_short}_{dataset_lower}_eps_sweep_no_morph.sh"
+
+            print(f"\n{model_short} - {dataset} (no morph):")
+
+            commands = generate_epsilon_sweep_commands_no_morph(model, dataset)
             files_created += write_files(
                 job_name, log_dir, txt_file, sh_file, commands, args.dry_run
             )
@@ -183,19 +246,22 @@ def main():
     print(f"{'=' * 60}")
     print(f"Total experiments: {total_experiments}")
     print(f"Files {'would be ' if args.dry_run else ''}created: {files_created}")
-    print(f"\nExperiments per model per dataset: {len(EPSILONS)}")
+    print(
+        f"\nExperiments per model per dataset: {len(EPSILONS)} (morph + no_morph each)"
+    )
 
     if not args.dry_run:
         print(f"\nFiles written to: {SLURM_DIR}")
-        print("\nTo submit all experiments:")
-        print(f"  cd {SLURM_DIR}")
-        print("  for f in *.sh; do sbatch $f; done")
-        print("\nOr submit individually:")
+        print("\nTo submit DP with morphology:")
+        print("  for f in *_eps_sweep.sh; do [[ $f != *no_morph* ]] && sbatch $f; done")
+        print("\nTo submit DP without morphology only:")
+        print("  for f in *_eps_sweep_no_morph.sh; do sbatch $f; done")
+        print("\nOr submit no_morph individually:")
         for model in MODELS:
             model_short = MODEL_NAMES[model]
             for dataset in DATASETS:
                 dataset_lower = dataset.lower()
-                print(f"  sbatch {model_short}_{dataset_lower}_eps_sweep.sh")
+                print(f"  sbatch {model_short}_{dataset_lower}_eps_sweep_no_morph.sh")
 
 
 if __name__ == "__main__":
