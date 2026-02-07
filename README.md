@@ -3,6 +3,7 @@
 This repository contains the implementation of the code for the paper "**DP-Morph: Improving the Privacy-Utility-Performance Trade-off for Differentially Private OCT Segmentation**".
 Our paper has been accepted at **ACM CCS 2025**, presented in the **18th ACM Workshop on Artificial Intelligence and Security (AISec)**.
 
+**Thesis usage:** For training, evaluation, and testing commands used in the thesis (OCT segmentation with U-Net, U-Net++, LF-UNet, DPSGD, morphology), see the **main repository [README](../../README.md)**.
 
 # About
 
@@ -48,12 +49,7 @@ First, the following packages should be installed:
 pip install torch tqdm numpy matplotlib opacus kornia torchinfo
 
 ``` 
-If you plan to use fastDP library, install:
 
-```bash
-pip install fast-dp
-
-```
 ## Training
 For running the code, you can:
 
@@ -68,9 +64,6 @@ To run the code in a privacy-preserving manner (using DPSGD), you should:
 python train-one-gpu.py --dataset UMN --n_classes 2 --batch_size 16 --num_iterations 200 --learning_rate 0.0005 --model_name NestedUNet --morphology True --operation "close" --DPSGD True cuda 
 
 ```
-
-For running the fastDP mode ,just replace train_one_gpu.py with train-one-gpu_fast.py.
-
 
 The arguments are:
 
