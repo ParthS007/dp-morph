@@ -9,7 +9,7 @@ Configuration:
 - Clipping Strategy: automatic (AUTO-S)
 - Batch Size: 8
 - Runs: 1 only
-- Morphology: model-dependent (U-Net/LFU-Net: smart morph both k=3; NestedUNet: normal morph close k=3)
+- Morphology: model-dependent (U-Net: smart Morph-Open k=3; NestedUNet: normal Morph-Close k=3; LF-UNet: smart Morph-Both k=3)
 - Epsilons: 8, 10, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200
 - Results Base: results_epsilon_sweep
 
@@ -88,7 +88,7 @@ echo "Task $SLURM_ARRAY_TASK_ID completed at $(date)"
 
 
 def get_morphology_args(model):
-    """Return morphology flags for the given model."""
+    """Return morphology flags for the given model. Matches thesis/create_collages: U-Net Open k=3 (smart); U-Net++ Close k=3 (normal); LF-UNet Both k=3 (smart)."""
     if model == "NestedUNet":
         return (
             "--morphology True "
@@ -96,7 +96,16 @@ def get_morphology_args(model):
             "--kernel_size 3 "
             "--smart_morphology False "
         )
-    # U-Net and LFUNet: smart morphology, both operation, k=3
+    if model == "unet":
+        # U-Net: Morph-Open k=3, layers 3-5 (smart), matching thesis Fig 4.10 and create_collages
+        return (
+            "--morphology True "
+            "--operation open "
+            "--kernel_size 3 "
+            "--smart_morphology True "
+            "--morph_layers 3,4,5 "
+        )
+    # LF-UNet: Morph-Both k=3, layers 3-5 (smart)
     return (
         "--morphology True "
         "--operation both "
