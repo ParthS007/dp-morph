@@ -24,7 +24,7 @@ from pathlib import Path
 
 # Base paths
 SLURM_DIR = Path(__file__).parent
-PROJECT_ROOT = "/scicore/home/wagner0024/shandi0000/2025-msc-parth-shandilya"
+PROJECT_ROOT = "/2025-msc-parth-shandilya" # adjust as needed, should point to the root of the project containing code/, thesis/, etc.
 
 # Experiment configurations
 MODELS = ["unet", "NestedUNet", "LFUNet"]
